@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'home/home_screen.dart';
-import 'orders/orders_screen.dart';
+import 'orders/orders_screen.dart'; // We'll keep this import but update the file
 import 'queries/queries_screen.dart';
 import 'profile/profile_screen.dart';
 

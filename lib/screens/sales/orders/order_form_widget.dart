@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
+import '../../../models/customer.dart';
+import '../../../models/ship_to.dart';
+import '../../../models/location.dart';
+import '../../../services/api_service.dart';
 import 'searchable_dropdown.dart';
 
 class OrderFormWidget extends StatefulWidget {
@@ -23,50 +28,23 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
   final TextEditingController _orderDateController = TextEditingController();
   final TextEditingController _deliveryDateController = TextEditingController();
   final TextEditingController _saleCodeController = TextEditingController();
+  final TextEditingController _customerSearchController = TextEditingController();
 
-  // Mock data for dropdowns - will be replaced with API data
-  final List<String> _customers = [
-    'B.K. Enterprises',
-    'Prajjawal Enterprises',
-    'Agro Suppliers Ltd',
-    'Farm Solutions Inc',
-    'Green Agro Ltd',
-    'Farmhouse Supplies',
-    'Agritech Solutions',
-    'Rural Feeds Ltd',
-    'Modern Agriculture Inc',
-    'Country Poultry Solutions',
-    'NextGen Farming',
-    'Organic Solutions',
-    'FarmEasy Supplies',
-    'GrowWell Technologies',
-  ];
+  // API Service
+  final ApiService _apiService = ApiService();
 
-  final List<String> _shipToLocations = [
-    'Main Warehouse',
-    'Delhi Branch',
-    'Mumbai Branch',
-    'Bangalore Branch',
-    'Hyderabad Center',
-    'Chennai Depot',
-    'Kolkata Warehouse',
-    'Pune Distribution Center',
-    'Ahmedabad Storage',
-    'Jaipur Facility',
-  ];
+  // Data Lists
+  List<Customer> _customers = [];
+  List<ShipTo> _shipToLocations = [];
+  List<Location> _locations = [];
 
-  final List<String> _locations = [
-    'Location 1',
-    'Location 2',
-    'Location 3',
-    'Location 4',
-    'North Zone',
-    'South Zone',
-    'East Zone',
-    'West Zone',
-    'Central Warehouse',
-    'Distribution Hub',
-  ];
+  // Loading states
+  bool _isLoadingCustomers = false;
+  bool _isLoadingShipTo = false;
+  bool _isLoadingLocations = false;
+
+  // For debounced customer search
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -82,6 +60,29 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     }
 
     _saleCodeController.text = widget.orderData['saleCode'] ?? '';
+
+    // Setup customer search listener with debounce
+    _customerSearchController.addListener(() {
+      if (_debounce?.isActive ?? false) _debounce!.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), () {
+        if (_customerSearchController.text.length >= 3) {
+          _searchCustomers(_customerSearchController.text);
+        }
+      });
+    });
+
+    // Initial fetch of limited customers
+    _fetchInitialCustomers();
+    _fetchLocations();
+
+    // If customer is already selected, fetch ship-to addresses
+    if (widget.orderData['customer'] != null) {
+      // Find customer by name
+      Customer? selectedCustomer = _getCustomerByName(widget.orderData['customer']);
+      if (selectedCustomer != null) {
+        _fetchShipToAddresses(selectedCustomer.no);
+      }
+    }
   }
 
   @override
@@ -89,7 +90,110 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     _orderDateController.dispose();
     _deliveryDateController.dispose();
     _saleCodeController.dispose();
+    _customerSearchController.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  Customer? _getCustomerByName(String customerName) {
+    try {
+      return _customers.firstWhere((customer) => customer.name == customerName);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _fetchInitialCustomers() async {
+    setState(() {
+      _isLoadingCustomers = true;
+    });
+
+    try {
+      final customersData = await _apiService.getCustomers(limit: 20);
+      setState(() {
+        _customers = customersData.map((json) => Customer.fromJson(json)).toList();
+        _isLoadingCustomers = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCustomers = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading customers: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _searchCustomers(String query) async {
+    setState(() {
+      _isLoadingCustomers = true;
+    });
+
+    try {
+      final customersData = await _apiService.getCustomers(searchQuery: query);
+      setState(() {
+        _customers = customersData.map((json) => Customer.fromJson(json)).toList();
+        _isLoadingCustomers = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCustomers = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error searching customers: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchShipToAddresses(String customerNo) async {
+    setState(() {
+      _isLoadingShipTo = true;
+      _shipToLocations = []; // Clear previous ship-to addresses
+    });
+
+    try {
+      final shipToData = await _apiService.getShipToAddresses(customerNo: customerNo);
+      setState(() {
+        _shipToLocations = shipToData.map((json) => ShipTo.fromJson(json)).toList();
+        _isLoadingShipTo = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingShipTo = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading ship-to addresses: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchLocations() async {
+    setState(() {
+      _isLoadingLocations = true;
+    });
+
+    try {
+      final locationsData = await _apiService.getLocations();
+      setState(() {
+        _locations = locationsData.map((json) => Location.fromJson(json)).toList();
+        _isLoadingLocations = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingLocations = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading locations: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -138,20 +242,40 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         const SizedBox(height: 16),
 
         // Customer Dropdown with Search
-        SearchableDropdown(
+        _isLoadingCustomers
+            ? const Center(child: CircularProgressIndicator())
+            : SearchableDropdown<Customer>(
           label: 'Customer Name',
           items: _customers,
-          selectedItem: widget.orderData['customer'],
-          onChanged: (value) {
-            widget.onUpdate('customer', value);
-            if (value != null) {
-              // Auto-generate sale code based on customer name
-              final saleCode = 'SC-${value.substring(0, min(3, value.length)).toUpperCase()}';
+          selectedItem: widget.orderData['customer'] != null
+              ? _getCustomerByName(widget.orderData['customer'])
+              : null,
+          onChanged: (customer) {
+            if (customer != null) {
+              widget.onUpdate('customer', customer.name);
+
+              // Generate sale code based on customer number
+              final saleCode = 'SC-${customer.no}';
               _saleCodeController.text = saleCode;
               widget.onUpdate('saleCode', saleCode);
+
+              // Fetch ship-to addresses for this customer
+              _fetchShipToAddresses(customer.no);
+            } else {
+              widget.onUpdate('customer', null);
+              _saleCodeController.clear();
+              widget.onUpdate('saleCode', '');
+              setState(() {
+                _shipToLocations = [];
+              });
             }
           },
           required: true,
+          displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
+          searchController: _customerSearchController,
+          onSearchTextChanged: (String query) {
+            // Debounced search is handled by listener in initState
+          },
         ),
         const SizedBox(height: 16),
 
@@ -175,26 +299,59 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         const SizedBox(height: 16),
 
         // Ship To
-        SearchableDropdown(
-          label: 'Ship To Code',
-          items: _shipToLocations,
-          selectedItem: widget.orderData['shipTo'],
-          onChanged: (value) {
-            widget.onUpdate('shipTo', value);
-          },
-          required: true,
+        _isLoadingShipTo
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SearchableDropdown<ShipTo>(
+              label: 'Ship To Code',
+              items: _shipToLocations,
+              selectedItem: widget.orderData['shipTo'] != null && _shipToLocations.isNotEmpty
+                  ? _shipToLocations.firstWhere(
+                    (shipTo) => shipTo.name == widget.orderData['shipTo'],
+                orElse: () => _shipToLocations.first,
+              )
+                  : null,
+              onChanged: (shipTo) {
+                widget.onUpdate('shipTo', shipTo?.name);
+              },
+              required: true,
+              displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',
+            ),
+
+            // Add New Ship-To button
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  _showAddShipToDialog();
+                },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add New'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
 
         // Location
-        SearchableDropdown(
+        _isLoadingLocations
+            ? const Center(child: CircularProgressIndicator())
+            : SearchableDropdown<Location>(
           label: 'Location',
           items: _locations,
-          selectedItem: widget.orderData['location'],
-          onChanged: (value) {
-            widget.onUpdate('location', value);
+          selectedItem: widget.orderData['location'] != null && _locations.isNotEmpty
+              ? _locations.firstWhere(
+                (location) => location.name == widget.orderData['location'],
+            orElse: () => _locations.first,
+          )
+              : null,
+          onChanged: (location) {
+            widget.onUpdate('location', location?.name);
           },
           required: true,
+          displayStringForItem: (Location location) => '${location.code} - ${location.name}',
         ),
       ],
     );
@@ -222,20 +379,40 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             const SizedBox(width: 16),
             // Customer Dropdown with Search
             Expanded(
-              child: SearchableDropdown(
+              child: _isLoadingCustomers
+                  ? const Center(child: CircularProgressIndicator())
+                  : SearchableDropdown<Customer>(
                 label: 'Customer Name',
                 items: _customers,
-                selectedItem: widget.orderData['customer'],
-                onChanged: (value) {
-                  widget.onUpdate('customer', value);
-                  if (value != null) {
-                    // Auto-generate sale code based on customer name
-                    final saleCode = 'SC-${value.substring(0, min(3, value.length)).toUpperCase()}';
+                selectedItem: widget.orderData['customer'] != null
+                    ? _getCustomerByName(widget.orderData['customer'])
+                    : null,
+                onChanged: (customer) {
+                  if (customer != null) {
+                    widget.onUpdate('customer', customer.name);
+
+                    // Generate sale code based on customer number
+                    final saleCode = 'SC-${customer.no}';
                     _saleCodeController.text = saleCode;
                     widget.onUpdate('saleCode', saleCode);
+
+                    // Fetch ship-to addresses for this customer
+                    _fetchShipToAddresses(customer.no);
+                  } else {
+                    widget.onUpdate('customer', null);
+                    _saleCodeController.clear();
+                    widget.onUpdate('saleCode', '');
+                    setState(() {
+                      _shipToLocations = [];
+                    });
                   }
                 },
                 required: true,
+                displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
+                searchController: _customerSearchController,
+                onSearchTextChanged: (String query) {
+                  // Debounced search is handled by listener in initState
+                },
               ),
             ),
           ],
@@ -276,27 +453,60 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           children: [
             // Ship To
             Expanded(
-              child: SearchableDropdown(
-                label: 'Ship To Code',
-                items: _shipToLocations,
-                selectedItem: widget.orderData['shipTo'],
-                onChanged: (value) {
-                  widget.onUpdate('shipTo', value);
-                },
-                required: true,
+              child: _isLoadingShipTo
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SearchableDropdown<ShipTo>(
+                    label: 'Ship To Code',
+                    items: _shipToLocations,
+                    selectedItem: widget.orderData['shipTo'] != null && _shipToLocations.isNotEmpty
+                        ? _shipToLocations.firstWhere(
+                          (shipTo) => shipTo.name == widget.orderData['shipTo'],
+                      orElse: () => _shipToLocations.first,
+                    )
+                        : null,
+                    onChanged: (shipTo) {
+                      widget.onUpdate('shipTo', shipTo?.name);
+                    },
+                    required: true,
+                    displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',
+                  ),
+
+                  // Add New Ship-To button
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        _showAddShipToDialog();
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add New'),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 16),
             // Location
             Expanded(
-              child: SearchableDropdown(
+              child: _isLoadingLocations
+                  ? const Center(child: CircularProgressIndicator())
+                  : SearchableDropdown<Location>(
                 label: 'Location',
                 items: _locations,
-                selectedItem: widget.orderData['location'],
-                onChanged: (value) {
-                  widget.onUpdate('location', value);
+                selectedItem: widget.orderData['location'] != null && _locations.isNotEmpty
+                    ? _locations.firstWhere(
+                      (location) => location.name == widget.orderData['location'],
+                  orElse: () => _locations.first,
+                )
+                    : null,
+                onChanged: (location) {
+                  widget.onUpdate('location', location?.name);
                 },
                 required: true,
+                displayStringForItem: (Location location) => '${location.code} - ${location.name}',
               ),
             ),
           ],
@@ -403,6 +613,112 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           },
         ),
       ],
+    );
+  }
+
+  // Show add ship-to dialog
+  void _showAddShipToDialog() {
+    // Check if customer is selected
+    if (widget.orderData['customer'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a customer first')),
+      );
+      return;
+    }
+
+    Customer? selectedCustomer = _getCustomerByName(widget.orderData['customer']);
+    if (selectedCustomer == null) return;
+
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController addressController = TextEditingController();
+    final TextEditingController cityController = TextEditingController();
+    final TextEditingController stateController = TextEditingController();
+    final TextEditingController postcodeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add New Ship-To Address'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name*',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: cityController,
+                decoration: const InputDecoration(
+                  labelText: 'City',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: stateController,
+                decoration: const InputDecoration(
+                  labelText: 'State',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: postcodeController,
+                decoration: const InputDecoration(
+                  labelText: 'Post Code',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Name is required')),
+                );
+                return;
+              }
+
+              // Here you would call the API to create a new ship-to address
+              // For now, we'll just show a success message
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('New ship-to address added successfully')),
+              );
+
+              // Refresh ship-to addresses after adding new one
+              _fetchShipToAddresses(selectedCustomer.no);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF008000),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 

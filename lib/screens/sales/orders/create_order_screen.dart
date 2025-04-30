@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../services/api_service.dart';
+import '../../../models/location.dart';
 import 'order_form_widget.dart';
 import 'order_item_form_widget.dart';
 import 'order_items_list_widget.dart';
@@ -15,6 +17,7 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _orderFormScrollController = ScrollController();
+  final ApiService _apiService = ApiService();
 
   // Form Data Structure
   final Map<String, dynamic> _orderData = {
@@ -24,6 +27,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     'saleCode': '',
     'shipTo': null,
     'location': null,
+    'locationCode': '',
     'items': <Map<String, dynamic>>[],
   };
 
@@ -32,6 +36,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   // Loading state
   bool _isLoading = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -114,6 +119,29 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
+  // Handle form field updates
+  void _handleFormUpdate(String key, dynamic value) {
+    setState(() {
+      _orderData[key] = value;
+
+      // If location is updated, also update locationCode
+      if (key == 'location' && value != null) {
+        // Try to extract the location code from the selected location
+        try {
+          // Find the matching location in _locations list to get its code
+          if (value is String && value.contains(' - ')) {
+            final locationName = value.split(' - ').last.trim();
+            final locationCode = value.split(' - ').first.trim();
+            _orderData['locationCode'] = locationCode;
+          }
+        } catch (e) {
+          _orderData['locationCode'] = '';
+          print('Error extracting location code: $e');
+        }
+      }
+    });
+  }
+
   // Submit the order
   void _submitOrder() {
     if (!_formKey.currentState!.validate()) {
@@ -174,31 +202,66 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // Process the order submission (simulate API call)
+  // Process the order submission
   Future<void> _processOrderSubmission() async {
     setState(() {
-      _isLoading = true;
+      _isSubmitting = true;
     });
 
-    // Simulate API call with delay
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Prepare order data for API
+      final Map<String, dynamic> orderPayload = {
+        'orderDate': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
+        'customerNo': _orderData['customer']?.split(' - ')?.first, // Assuming format: "C001 - Customer Name"
+        'shipToCode': _orderData['shipTo'],
+        'locationCode': _orderData['locationCode'],
+        'items': _orderData['items'].map((item) => {
+          'itemNo': item['itemNo'],
+          'quantity': item['quantity'],
+          'unitOfMeasure': item['unitOfMeasure'],
+          'unitPrice': item['price'],
+        }).toList(),
+      };
 
-    setState(() {
-      _isLoading = false;
-    });
+      // For demo purposes, we'll just simulate an API call
+      await Future.delayed(const Duration(seconds: 2));
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Order submitted successfully!'),
-        backgroundColor: Color(0xFF008000),
-      ),
-    );
+      // In a real app, you would call your API service
+      // await _apiService.createSalesOrder(orderPayload);
 
-    // Navigate back after short delay
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      Navigator.pop(context);
-    });
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order submitted successfully!'),
+            backgroundColor: Color(0xFF008000),
+          ),
+        );
+
+        // Navigate back after short delay
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          Navigator.pop(context);
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -227,7 +290,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           ),
         ],
       ),
-      body: _isLoading
+      body: _isSubmitting
           ? const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -260,11 +323,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               OrderFormWidget(
                 orderData: _orderData,
                 isSmallScreen: isSmallScreen,
-                onUpdate: (key, value) {
-                  setState(() {
-                    _orderData[key] = value;
-                  });
-                },
+                onUpdate: _handleFormUpdate,
               ),
 
               const SizedBox(height: 24),
@@ -273,6 +332,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               OrderItemFormWidget(
                 isSmallScreen: isSmallScreen,
                 onAddItem: addItemToOrder,
+                locationCode: _orderData['locationCode'],
               ),
 
               const SizedBox(height: 24),

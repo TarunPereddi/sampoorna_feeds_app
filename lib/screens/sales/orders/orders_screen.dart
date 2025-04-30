@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../widgets/common_app_bar.dart';
+import '../../../services/api_service.dart';
+import '../../../models/sales_order.dart';
 import 'create_order_screen.dart';
 import 'order_list_view.dart';
 import 'order_table_view.dart';
@@ -20,10 +22,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
   DateTime? _toDate;
   bool _isFilterExpanded = false;
 
+  // API and data
+  final ApiService _apiService = ApiService();
+  List<SalesOrder> _allOrders = [];
+
   // For handling pagination
   int _currentPage = 1;
   final int _itemsPerPage = 10;
   bool _isLoading = false;
+  bool _isInitialLoading = true;
 
   // Status filter options
   final List<String> _statusOptions = [
@@ -38,80 +45,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // Mock data for orders - will be replaced with API data
-  final List<Map<String, dynamic>> _allOrders = [
-    {
-      'id': 'ORD-2025-001',
-      'customerName': 'B.K. Enterprises',
-      'date': '14/04/2025',
-      'amount': '₹23,500',
-      'status': 'Pending',
-    },
-    {
-      'id': 'ORD-2025-002',
-      'customerName': 'Prajjawal Enterprises',
-      'date': '13/04/2025',
-      'amount': '₹18,750',
-      'status': 'Completed',
-    },
-    {
-      'id': 'ORD-2025-003',
-      'customerName': 'Agro Suppliers Ltd',
-      'date': '12/04/2025',
-      'amount': '₹31,200',
-      'status': 'Processing',
-    },
-    {
-      'id': 'ORD-2025-004',
-      'customerName': 'Farm Solutions Inc',
-      'date': '11/04/2025',
-      'amount': '₹15,800',
-      'status': 'Completed',
-    },
-    {
-      'id': 'ORD-2025-005',
-      'customerName': 'Green Agro Ltd',
-      'date': '10/04/2025',
-      'amount': '₹27,350',
-      'status': 'Completed',
-    },
-    {
-      'id': 'ORD-2025-006',
-      'customerName': 'B.K. Enterprises',
-      'date': '09/04/2025',
-      'amount': '₹12,800',
-      'status': 'Cancelled',
-    },
-    {
-      'id': 'ORD-2025-007',
-      'customerName': 'Agro Suppliers Ltd',
-      'date': '08/04/2025',
-      'amount': '₹45,200',
-      'status': 'Processing',
-    },
-    {
-      'id': 'ORD-2025-008',
-      'customerName': 'Farm Solutions Inc',
-      'date': '07/04/2025',
-      'amount': '₹19,600',
-      'status': 'Pending',
-    },
-    {
-      'id': 'ORD-2025-009',
-      'customerName': 'Prajjawal Enterprises',
-      'date': '06/04/2025',
-      'amount': '₹33,750',
-      'status': 'Completed',
-    },
-    {
-      'id': 'ORD-2025-010',
-      'customerName': 'Green Agro Ltd',
-      'date': '05/04/2025',
-      'amount': '₹29,100',
-      'status': 'Completed',
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -123,6 +56,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _loadMoreOrders();
       }
     });
+
+    // Initial load of orders
+    _loadOrders();
   }
 
   @override
@@ -132,9 +68,49 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.dispose();
   }
 
+  // Load orders from API
+  Future<void> _loadOrders() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _isInitialLoading = true;
+    });
+
+    try {
+      // In a real app, you would implement pagination and filtering on the API side
+      final ordersData = await _apiService.getSalesOrders();
+
+      List<SalesOrder> orders = [];
+      for (var orderJson in ordersData) {
+        // Create SalesOrder objects from the API response
+        orders.add(SalesOrder.fromJson(orderJson));
+      }
+
+      setState(() {
+        _allOrders = orders;
+        _isLoading = false;
+        _isInitialLoading = false;
+        _currentPage = 1;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _isInitialLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading orders: $e')),
+        );
+      }
+    }
+  }
+
   // Load more orders when scrolling to bottom (for pagination)
   Future<void> _loadMoreOrders() async {
-    // This would be an API call in a real app
+    // This is a placeholder for API-based pagination
+    // In a real app, you would fetch more orders from the API
     if (!_isLoading) {
       setState(() {
         _isLoading = true;
@@ -152,33 +128,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   // Refresh orders (e.g., on pull-to-refresh)
   Future<void> _refreshOrders() async {
-    // This would be an API call in a real app
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Simulate API call delay
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    setState(() {
-      _currentPage = 1;
-      _isLoading = false;
-    });
+    await _loadOrders();
   }
 
   // Apply filters to orders list
-  List<Map<String, dynamic>> _getFilteredOrders() {
+  List<SalesOrder> _getFilteredOrders() {
     return _allOrders.where((order) {
       // Apply status filter
-      if (_selectedStatus != 'All' && order['status'] != _selectedStatus) {
+      if (_selectedStatus != 'All' && order.status != _selectedStatus) {
         return false;
       }
 
       // Apply search filter (case insensitive)
       if (_searchQuery.isNotEmpty) {
         final searchLower = _searchQuery.toLowerCase();
-        final idLower = order['id'].toLowerCase();
-        final customerLower = order['customerName'].toLowerCase();
+        final idLower = order.no.toLowerCase();
+        final customerLower = order.customerNo.toLowerCase();
 
         if (!idLower.contains(searchLower) && !customerLower.contains(searchLower)) {
           return false;
@@ -187,25 +152,41 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
       // Apply date filters if set
       if (_fromDate != null || _toDate != null) {
-        // Parse the date string (format: dd/MM/yyyy)
-        final parts = order['date'].split('/');
-        final orderDate = DateTime(
-          int.parse(parts[2]), // year
-          int.parse(parts[1]), // month
-          int.parse(parts[0]), // day
-        );
-
-        if (_fromDate != null && orderDate.isBefore(_fromDate!)) {
+        if (_fromDate != null && order.orderDate.isBefore(_fromDate!)) {
           return false;
         }
 
-        if (_toDate != null && orderDate.isAfter(_toDate!)) {
-          return false;
+        if (_toDate != null) {
+          // Add one day to _toDate to include the end date in the filter
+          final toDatePlusOne = _toDate!.add(const Duration(days: 1));
+          if (order.orderDate.isAfter(toDatePlusOne)) {
+            return false;
+          }
         }
       }
 
       return true;
     }).toList();
+  }
+
+  // Convert SalesOrder to the format expected by the list/table views
+  List<Map<String, dynamic>> _convertOrdersToViewFormat(List<SalesOrder> orders) {
+    return orders.map((order) {
+      return {
+        'id': order.no,
+        'customerName': order.customerName ?? order.customerNo,
+        'date': DateFormat('dd/MM/yyyy').format(order.orderDate),
+        'amount': '₹${_calculateOrderAmount(order)}',
+        'status': order.status,
+      };
+    }).toList();
+  }
+
+  // Placeholder for calculating order amount
+  // In a real app, this would come from the API or from line items
+  String _calculateOrderAmount(SalesOrder order) {
+    // This is just a mock calculation
+    return (10000 + order.no.hashCode % 40000).toString();
   }
 
   @override
@@ -215,6 +196,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     // Get filtered orders based on applied filters
     final filteredOrders = _getFilteredOrders();
+    final viewOrders = _convertOrdersToViewFormat(filteredOrders);
 
     return Scaffold(
       appBar: CommonAppBar(
@@ -240,7 +222,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
         backgroundColor: const Color(0xFF008000),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: RefreshIndicator(
+      body: _isInitialLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
         onRefresh: _refreshOrders,
         child: Column(
           children: [
@@ -258,18 +242,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 padding: const EdgeInsets.all(16),
                 child: isSmallScreen
                     ? OrderListView(
-                  orders: filteredOrders,
+                  orders: viewOrders,
                   scrollController: _scrollController,
                 )
                     : OrderTableView(
-                  orders: filteredOrders,
+                  orders: viewOrders,
                   scrollController: _scrollController,
                 ),
               ),
             ),
 
             // Loading indicator for pagination
-            if (_isLoading)
+            if (_isLoading && !_isInitialLoading)
               const Padding(
                 padding: EdgeInsets.all(8.0),
                 child: Center(
@@ -281,6 +265,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     );
   }
+
   // Build the search bar
   Widget _buildSearchBar() {
     return Padding(

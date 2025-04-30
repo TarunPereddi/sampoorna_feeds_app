@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../models/item.dart';
+import '../../../services/api_service.dart';
 import 'searchable_dropdown.dart';
 
 class OrderItemFormWidget extends StatefulWidget {
   final bool isSmallScreen;
   final Function(Map<String, dynamic>) onAddItem;
+  final String? locationCode;
 
   const OrderItemFormWidget({
     super.key,
     required this.isSmallScreen,
     required this.onAddItem,
+    this.locationCode,
   });
 
   @override
@@ -26,8 +30,11 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _totalAmountController = TextEditingController();
 
+  // API Service
+  final ApiService _apiService = ApiService();
+
   // Selected values
-  String? _selectedItem;
+  Item? _selectedItem;
   String? _selectedUnitOfMeasure;
 
   // Item values
@@ -36,22 +43,11 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   double _price = 0;
   double _totalAmount = 0;
 
-  // Mock data for dropdowns
-  final List<String> _items = [
-    'Item 1 - Feed Type A',
-    'Item 2 - Protein Supplement',
-    'Item 3 - Mineral Mix',
-    'Item 4 - Growth Booster',
-    'Item 5 - Layer Feed Premium',
-    'Item 6 - Broiler Starter Mix',
-    'Item 7 - Fish Feed Pellets',
-    'Item 8 - Cattle Feed Mix',
-    'Item 9 - Organic Supplement',
-    'Item 10 - Vitamin Boost',
-    'Item 11 - Herbal Supplement',
-    'Item 12 - Goat Feed Mix',
-  ];
+  // Loading state for items
+  bool _isLoadingItems = false;
+  List<Item> _items = [];
 
+  // Units of measure (mock data for now)
   final List<String> _unitsOfMeasure = [
     'Bag',
     'Kg',
@@ -76,6 +72,46 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     // Add listeners to recalculate total amount
     _quantityController.addListener(_calculateItemTotal);
     _priceController.addListener(_calculateItemTotal);
+
+    // Fetch items if location is provided
+    if (widget.locationCode != null && widget.locationCode!.isNotEmpty) {
+      _fetchItems(widget.locationCode!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(OrderItemFormWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Fetch items if location changed
+    if (widget.locationCode != oldWidget.locationCode && 
+        widget.locationCode != null && 
+        widget.locationCode!.isNotEmpty) {
+      _fetchItems(widget.locationCode!);
+    }
+  }
+
+  Future<void> _fetchItems(String locationCode) async {
+    setState(() {
+      _isLoadingItems = true;
+    });
+
+    try {
+      final itemsData = await _apiService.getItems(locationCode: locationCode);
+      setState(() {
+        _items = itemsData.map((json) => Item.fromJson(json)).toList();
+        _isLoadingItems = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingItems = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading items: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -131,7 +167,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     }
 
     final Map<String, dynamic> newItem = {
-      'itemNo': _selectedItem!,
+      'itemNo': _selectedItem!.no,
+      'itemDescription': _selectedItem!.description,
       'unitOfMeasure': _selectedUnitOfMeasure!,
       'quantity': _quantity,
       'mrp': _mrp,
@@ -177,30 +214,55 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
               const Divider(),
               const SizedBox(height: 16),
 
-              // Layout based on screen size
-              widget.isSmallScreen
-                  ? _buildSmallScreenLayout()
-                  : _buildLargeScreenLayout(),
+              // Check if location is selected
+              if (widget.locationCode == null || widget.locationCode!.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.amber),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          'Please select a location in the order form to view available items',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              if (widget.locationCode != null && widget.locationCode!.isNotEmpty)
+                // Layout based on screen size
+                widget.isSmallScreen
+                    ? _buildSmallScreenLayout()
+                    : _buildLargeScreenLayout(),
 
               const SizedBox(height: 16),
 
               // Add Button
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: _addItemToOrder,
-                  icon: const Icon(Icons.add),
-                  label: const Text('ADD ITEM'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              if (widget.locationCode != null && widget.locationCode!.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: _addItemToOrder,
+                    icon: const Icon(Icons.add),
+                    label: const Text('ADD ITEM'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2196F3),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -214,33 +276,36 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Item Selection
-        SearchableDropdown(
-          label: 'Item No',
-          items: _items,
-          selectedItem: _selectedItem,
-          onChanged: (value) {
-            setState(() {
-              _selectedItem = value;
-              if (value != null) {
-                // Set mock MRP value - would be replaced with API data
-                _mrp = 100.0;
-                _mrpController.text = _mrp.toString();
+        _isLoadingItems
+            ? const Center(child: CircularProgressIndicator())
+            : SearchableDropdown<Item>(
+                label: 'Item',
+                items: _items,
+                selectedItem: _selectedItem,
+                onChanged: (item) {
+                  setState(() {
+                    _selectedItem = item;
+                    if (item != null) {
+                      // Set MRP value from the item
+                      _mrp = item.unitPrice;
+                      _mrpController.text = _mrp.toString();
 
-                // Set default price as MRP
-                _price = _mrp;
-                _priceController.text = _price.toString();
+                      // Set default price as MRP
+                      _price = _mrp;
+                      _priceController.text = _price.toString();
 
-                // Calculate total if quantity is set
-                _calculateItemTotal();
-              }
-            });
-          },
-          required: true,
-        ),
+                      // Calculate total if quantity is set
+                      _calculateItemTotal();
+                    }
+                  });
+                },
+                required: true,
+                displayStringForItem: (Item item) => '${item.no} - ${item.description}',
+              ),
         const SizedBox(height: 16),
 
         // Unit of Measure
-        SearchableDropdown(
+        SearchableDropdown<String>(
           label: 'Unit of Measure',
           items: _unitsOfMeasure,
           selectedItem: _selectedUnitOfMeasure,
@@ -250,6 +315,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             });
           },
           required: true,
+          displayStringForItem: (String uom) => uom,
         ),
         const SizedBox(height: 16),
 
@@ -297,35 +363,38 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             // Item No
             Expanded(
               flex: 2,
-              child: SearchableDropdown(
-                label: 'Item No',
-                items: _items,
-                selectedItem: _selectedItem,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedItem = value;
-                    if (value != null) {
-                      // Set mock MRP value - would be replaced with API data
-                      _mrp = 100.0;
-                      _mrpController.text = _mrp.toString();
+              child: _isLoadingItems
+                  ? const Center(child: CircularProgressIndicator())
+                  : SearchableDropdown<Item>(
+                      label: 'Item',
+                      items: _items,
+                      selectedItem: _selectedItem,
+                      onChanged: (item) {
+                        setState(() {
+                          _selectedItem = item;
+                          if (item != null) {
+                            // Set MRP value from the item
+                            _mrp = item.unitPrice;
+                            _mrpController.text = _mrp.toString();
 
-                      // Set default price as MRP
-                      _price = _mrp;
-                      _priceController.text = _price.toString();
+                            // Set default price as MRP
+                            _price = _mrp;
+                            _priceController.text = _price.toString();
 
-                      // Calculate total if quantity is set
-                      _calculateItemTotal();
-                    }
-                  });
-                },
-                required: true,
-              ),
+                            // Calculate total if quantity is set
+                            _calculateItemTotal();
+                          }
+                        });
+                      },
+                      required: true,
+                      displayStringForItem: (Item item) => '${item.no} - ${item.description}',
+                    ),
             ),
             const SizedBox(width: 16),
             // Unit of Measure
             Expanded(
               flex: 1,
-              child: SearchableDropdown(
+              child: SearchableDropdown<String>(
                 label: 'Unit of Measure',
                 items: _unitsOfMeasure,
                 selectedItem: _selectedUnitOfMeasure,
@@ -335,6 +404,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                   });
                 },
                 required: true,
+                displayStringForItem: (String uom) => uom,
               ),
             ),
           ],

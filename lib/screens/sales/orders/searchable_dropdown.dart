@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
-class SearchableDropdown extends StatefulWidget {
+class SearchableDropdown<T> extends StatefulWidget {
   final String label;
-  final List<String> items;
-  final String? selectedItem;
-  final Function(String?) onChanged;
+  final List<T> items;
+  final T? selectedItem;
+  final Function(T?) onChanged;
   final bool required;
+  final String Function(T) displayStringForItem;
+  final TextEditingController? searchController;
+  final Function(String)? onSearchTextChanged;
 
   const SearchableDropdown({
     super.key,
@@ -14,24 +17,29 @@ class SearchableDropdown extends StatefulWidget {
     this.selectedItem,
     required this.onChanged,
     this.required = false,
+    required this.displayStringForItem,
+    this.searchController,
+    this.onSearchTextChanged,
   });
 
   @override
-  State<SearchableDropdown> createState() => _SearchableDropdownState();
+  State<SearchableDropdown<T>> createState() => _SearchableDropdownState<T>();
 }
 
-class _SearchableDropdownState extends State<SearchableDropdown> {
-  final TextEditingController _searchController = TextEditingController();
+class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
+  late TextEditingController _searchController;
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
 
   bool _isDropdownOpen = false;
-  List<String> _filteredItems = [];
+  List<T> _filteredItems = [];
   OverlayEntry? _overlayEntry;
+  bool _isInternalChange = false;
 
   @override
   void initState() {
     super.initState();
+    _searchController = widget.searchController ?? TextEditingController();
     _filteredItems = List.from(widget.items);
 
     _focusNode.addListener(() {
@@ -44,7 +52,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
   }
 
   @override
-  void didUpdateWidget(SearchableDropdown oldWidget) {
+  void didUpdateWidget(SearchableDropdown<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     // Update filtered items if the item list changes
@@ -53,11 +61,21 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
         _filteredItems = List.from(widget.items);
       });
     }
+    
+    // Update search controller if it changes
+    if (oldWidget.searchController != widget.searchController && 
+        widget.searchController != null && 
+        _searchController != widget.searchController) {
+      _searchController = widget.searchController!;
+    }
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    // Only dispose the controller if we created it
+    if (widget.searchController == null) {
+      _searchController.dispose();
+    }
     _focusNode.dispose();
     _closeDropdown();
     super.dispose();
@@ -69,7 +87,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
         _filteredItems = List.from(widget.items);
       } else {
         _filteredItems = widget.items
-            .where((item) => item.toLowerCase().contains(query.toLowerCase()))
+            .where((item) => widget.displayStringForItem(item).toLowerCase().contains(query.toLowerCase()))
             .toList();
       }
 
@@ -78,6 +96,11 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
         _updateOverlay();
       }
     });
+    
+    // Call the onSearchTextChanged callback if provided
+    if (!_isInternalChange && widget.onSearchTextChanged != null) {
+      widget.onSearchTextChanged!(query);
+    }
   }
 
   void _openDropdown() {
@@ -120,9 +143,13 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
     }
   }
 
-  void _selectItem(String item) {
+  void _selectItem(T item) {
     widget.onChanged(item);
+    
+    _isInternalChange = true;
     _searchController.clear();
+    _isInternalChange = false;
+    
     _filteredItems = List.from(widget.items);
     _closeDropdown();
     FocusScope.of(context).unfocus();
@@ -159,7 +186,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
               itemBuilder: (context, index) {
                 final item = _filteredItems[index];
                 return ListTile(
-                  title: Text(item),
+                  title: Text(widget.displayStringForItem(item)),
                   selected: widget.selectedItem == item,
                   selectedTileColor: const Color(0xFFE8F5E9),
                   onTap: () => _selectItem(item),
@@ -218,7 +245,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
                     ],
                   ),
                 ),
-                child: Text(widget.selectedItem!),
+                child: Text(widget.displayStringForItem(widget.selectedItem!)),
               )
                   : TextField(
                 controller: _searchController,
@@ -227,7 +254,9 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
                   hintText: 'Search ${widget.label.toLowerCase()}...',
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                  suffixIcon: widget.searchController != null 
+                      ? const Icon(Icons.search)
+                      : const Icon(Icons.arrow_drop_down),
                 ),
                 onChanged: _filterItems,
               ),
