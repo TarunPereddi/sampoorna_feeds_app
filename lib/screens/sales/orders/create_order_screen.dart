@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../models/location.dart';
 import 'order_form_widget.dart';
 import 'order_item_form_widget.dart';
@@ -130,13 +132,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         try {
           // Find the matching location in _locations list to get its code
           if (value is String && value.contains(' - ')) {
-            final locationName = value.split(' - ').last.trim();
             final locationCode = value.split(' - ').first.trim();
             _orderData['locationCode'] = locationCode;
           }
         } catch (e) {
           _orderData['locationCode'] = '';
-          print('Error extracting location code: $e');
+          debugPrint('Error extracting location code: $e');
         }
       }
     });
@@ -209,24 +210,53 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     });
 
     try {
+      // Get the current authenticated sales person
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Extract customer number from the selected customer
+      String? customerNo;
+      if (_orderData['customer'] != null && _orderData['customer'].contains(' - ')) {
+        customerNo = _orderData['customer'].split(' - ').first.trim();
+      }
+      
+      if (customerNo == null) {
+        throw Exception('Invalid customer selection');
+      }
+
       // Prepare order data for API
       final Map<String, dynamic> orderPayload = {
-        'orderDate': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
-        'customerNo': _orderData['customer']?.split(' - ')?.first, // Assuming format: "C001 - Customer Name"
-        'shipToCode': _orderData['shipTo'],
-        'locationCode': _orderData['locationCode'],
-        'items': _orderData['items'].map((item) => {
-          'itemNo': item['itemNo'],
-          'quantity': item['quantity'],
-          'unitOfMeasure': item['unitOfMeasure'],
-          'unitPrice': item['price'],
+        'Document_Type': 'Order',
+        'Sell_to_Customer_No': customerNo,
+        'Order_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
+        'Posting_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
+        'Document_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
+        'Requested_Delivery_Date': _orderData['deliveryDate'] != null 
+            ? DateFormat('yyyy-MM-dd').format(_orderData['deliveryDate'])
+            : DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
+        'Salesperson_Code': salesPerson.code,
+        'Location_Code': _orderData['locationCode'],
+        'Status': 'Open',
+        'lines': _orderData['items'].map((item) => {
+          'Type': 'Item',
+          'No': item['itemNo'],
+          'Description': item['itemDescription'],
+          'Quantity': item['quantity'],
+          'Unit_of_Measure': item['unitOfMeasure'],
+          'Unit_Price': item['price'],
         }).toList(),
       };
 
-      // For demo purposes, we'll just simulate an API call
+      // In a real app, you would call the API service
+      debugPrint('Order Payload: $orderPayload');
+      
+      // Simulate API call for now
       await Future.delayed(const Duration(seconds: 2));
-
-      // In a real app, you would call your API service
+      
       // await _apiService.createSalesOrder(orderPayload);
 
       setState(() {

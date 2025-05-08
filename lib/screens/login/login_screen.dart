@@ -1,4 +1,7 @@
+// lib/screens/login/login_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,10 +14,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _selectedPersona = 'customer'; // Default selection
+  String _selectedPersona = 'sales'; // Default to sales persona
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    
     return Scaffold(
       backgroundColor: const Color(0xFFE8F5E9), // Light green background
       body: SafeArea(
@@ -122,20 +128,25 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
+                          // Show error message if login fails
+                          if (authService.error != null && !_isLoading)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Text(
+                                authService.error!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+
                           const SizedBox(height: 32),
                           SizedBox(
                             width: double.infinity,
                             height: 50,
                             child: ElevatedButton(
-                              onPressed: () {
-                                if (_formKey.currentState!.validate()) {
-                                  // Navigate to the appropriate shell based on selected persona
-                                  Navigator.pushReplacementNamed(
-                                    context,
-                                    '/$_selectedPersona',
-                                  );
-                                }
-                              },
+                              onPressed: _isLoading ? null : () => _handleLogin(context),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Theme.of(context).primaryColor,
                                 foregroundColor: Colors.white,
@@ -143,10 +154,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              child: const Text(
-                                'Login',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                              child: _isLoading
+                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  : const Text(
+                                      'Login',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
                             ),
                           ),
                         ],
@@ -198,6 +211,41 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleLogin(BuildContext context) async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final username = _usernameController.text;
+    final password = _passwordController.text;
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    if (_selectedPersona == 'sales') {
+      // Use AuthService for sales persona
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final success = await authService.login(username, password);
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      if (success) {
+        // Navigate to sales shell
+        Navigator.pushReplacementNamed(context, '/sales');
+      }
+    } else {
+      // For customer and vendor personas, use the original navigation
+      setState(() {
+        _isLoading = false;
+      });
+      
+      Navigator.pushReplacementNamed(context, '/$_selectedPersona');
+    }
   }
 
   @override

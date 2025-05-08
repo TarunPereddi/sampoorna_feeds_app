@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../models/item.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import 'searchable_dropdown.dart';
 
 class OrderItemFormWidget extends StatefulWidget {
@@ -29,6 +31,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   final TextEditingController _mrpController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _totalAmountController = TextEditingController();
+  final TextEditingController _itemSearchController = TextEditingController();
 
   // API Service
   final ApiService _apiService = ApiService();
@@ -52,7 +55,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     'Bag',
     'Kg',
     'Box',
-    'Set',
+    'KG BAG',
+    '50 KG BAG',
     'Ton',
     'Packet',
     'Carton',
@@ -77,6 +81,13 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     if (widget.locationCode != null && widget.locationCode!.isNotEmpty) {
       _fetchItems(widget.locationCode!);
     }
+
+    // Add listener for item search
+    _itemSearchController.addListener(() {
+      if (_itemSearchController.text.length >= 3 && widget.locationCode != null) {
+        _searchItems(_itemSearchController.text, widget.locationCode!);
+      }
+    });
   }
 
   @override
@@ -114,12 +125,47 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     }
   }
 
+  Future<void> _searchItems(String query, String locationCode) async {
+    setState(() {
+      _isLoadingItems = true;
+    });
+
+    try {
+      // In a real app, you might want to add a specific search endpoint in your API service
+      // For now, we'll simulate filtering on the client side
+      final itemsData = await _apiService.getItems(locationCode: locationCode);
+      
+      final filteredItems = itemsData.where((item) {
+        final description = item['Description'] as String? ?? '';
+        final itemNo = item['No'] as String? ?? '';
+        
+        return description.toLowerCase().contains(query.toLowerCase()) || 
+               itemNo.toLowerCase().contains(query.toLowerCase());
+      }).toList();
+      
+      setState(() {
+        _items = filteredItems.map((json) => Item.fromJson(json)).toList();
+        _isLoadingItems = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingItems = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error searching items: $e')),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _quantityController.dispose();
     _mrpController.dispose();
     _priceController.dispose();
     _totalAmountController.dispose();
+    _itemSearchController.dispose();
     super.dispose();
   }
 
@@ -150,6 +196,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       _mrp = 0;
       _price = 0;
       _totalAmount = 0;
+      _itemSearchController.clear();
     });
   }
 
@@ -294,6 +341,13 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                       _price = _mrp;
                       _priceController.text = _price.toString();
 
+                      // Set default unit of measure based on item's sales unit of measure if available
+                      if (item.toString().contains('KG BAG')) {
+                        _selectedUnitOfMeasure = '50 KG BAG';
+                      } else {
+                        _selectedUnitOfMeasure = 'Kg';
+                      }
+
                       // Calculate total if quantity is set
                       _calculateItemTotal();
                     }
@@ -301,6 +355,10 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                 },
                 required: true,
                 displayStringForItem: (Item item) => '${item.no} - ${item.description}',
+                searchController: _itemSearchController,
+                onSearchTextChanged: (String query) {
+                  // Search handled by listener in initState
+                },
               ),
         const SizedBox(height: 16),
 
@@ -381,6 +439,13 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                             _price = _mrp;
                             _priceController.text = _price.toString();
 
+                            // Set default unit of measure based on item's sales unit of measure if available
+                            if (item.toString().contains('KG BAG')) {
+                              _selectedUnitOfMeasure = '50 KG BAG';
+                            } else {
+                              _selectedUnitOfMeasure = 'Kg';
+                            }
+
                             // Calculate total if quantity is set
                             _calculateItemTotal();
                           }
@@ -388,6 +453,10 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                       },
                       required: true,
                       displayStringForItem: (Item item) => '${item.no} - ${item.description}',
+                      searchController: _itemSearchController,
+                      onSearchTextChanged: (String query) {
+                        // Search handled by listener in initState
+                      },
                     ),
             ),
             const SizedBox(width: 16),
@@ -490,6 +559,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             filled: true,
             fillColor: enabled ? Colors.white : Colors.grey.shade100,
+            prefixText: label == 'Total Amount' || label == 'MRP' || label == 'Price' ? '₹' : null,
           ),
           validator: required
               ? (value) => value == null || value.isEmpty ? 'This field is required' : null
@@ -514,6 +584,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             Text('• MRP is auto-filled based on the selected item.'),
             Text('• You can adjust the price if different from MRP.'),
             Text('• Total amount is automatically calculated.'),
+            SizedBox(height: 12),
+            Text('Note: Items are filtered based on the selected location.'),
           ],
         ),
         actions: [

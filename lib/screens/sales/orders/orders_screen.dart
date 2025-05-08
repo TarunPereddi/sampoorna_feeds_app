@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../models/sales_order.dart';
 import 'create_order_screen.dart';
 import 'order_list_view.dart';
@@ -24,21 +26,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   // API and data
   final ApiService _apiService = ApiService();
-  List<SalesOrder> _allOrders = [];
+  List<dynamic> _allOrders = [];
 
   // For handling pagination
   int _currentPage = 1;
   final int _itemsPerPage = 10;
   bool _isLoading = false;
   bool _isInitialLoading = true;
+  bool _hasMoreOrders = true;
 
   // Status filter options
   final List<String> _statusOptions = [
     'All',
-    'Pending',
-    'Processing',
+    'Released',
+    'Open',
     'Completed',
-    'Cancelled',
+    'Archived',
   ];
 
   // Search controller
@@ -53,7 +56,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     // Add scroll listener for infinite scroll
     _scrollController.addListener(() {
       if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-        _loadMoreOrders();
+        if (!_isLoading && _hasMoreOrders) {
+          _loadMoreOrders();
+        }
       }
     });
 
@@ -78,20 +83,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
 
     try {
-      // In a real app, you would implement pagination and filtering on the API side
-      final ordersData = await _apiService.getSalesOrders();
-
-      List<SalesOrder> orders = [];
-      for (var orderJson in ordersData) {
-        // Create SalesOrder objects from the API response
-        orders.add(SalesOrder.fromJson(orderJson));
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
       }
+
+      final orders = await _apiService.getSalesOrders(
+        salesPersonName: salesPerson.name,
+        searchQuery: _searchQuery,
+        status: _selectedStatus != 'All' ? _selectedStatus : null,
+        fromDate: _fromDate,
+        toDate: _toDate,
+        limit: _itemsPerPage,
+        offset: 0,
+      );
 
       setState(() {
         _allOrders = orders;
         _isLoading = false;
         _isInitialLoading = false;
         _currentPage = 1;
+        _hasMoreOrders = orders.length == _itemsPerPage;
       });
     } catch (e) {
       setState(() {
@@ -109,20 +123,50 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   // Load more orders when scrolling to bottom (for pagination)
   Future<void> _loadMoreOrders() async {
-    // This is a placeholder for API-based pagination
-    // In a real app, you would fetch more orders from the API
-    if (!_isLoading) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (_isLoading || !_hasMoreOrders) return;
 
-      // Simulate API call delay
-      await Future.delayed(const Duration(milliseconds: 800));
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final offset = _currentPage * _itemsPerPage;
+      
+      final moreOrders = await _apiService.getSalesOrders(
+        salesPersonName: salesPerson.code,
+        searchQuery: _searchQuery,
+        status: _selectedStatus != 'All' ? _selectedStatus : null,
+        fromDate: _fromDate,
+        toDate: _toDate,
+        limit: _itemsPerPage,
+        offset: offset,
+      );
 
       setState(() {
-        _currentPage++;
+        if (moreOrders.isNotEmpty) {
+          _allOrders.addAll(moreOrders);
+          _currentPage++;
+        }
+        _hasMoreOrders = moreOrders.length == _itemsPerPage;
         _isLoading = false;
       });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading more orders: $e')),
+        );
+      }
     }
   }
 
@@ -131,62 +175,48 @@ class _OrdersScreenState extends State<OrdersScreen> {
     await _loadOrders();
   }
 
-  // Apply filters to orders list
-  List<SalesOrder> _getFilteredOrders() {
-    return _allOrders.where((order) {
-      // Apply status filter
-      if (_selectedStatus != 'All' && order.status != _selectedStatus) {
-        return false;
-      }
-
-      // Apply search filter (case insensitive)
-      if (_searchQuery.isNotEmpty) {
-        final searchLower = _searchQuery.toLowerCase();
-        final idLower = order.no.toLowerCase();
-        final customerLower = order.customerNo.toLowerCase();
-
-        if (!idLower.contains(searchLower) && !customerLower.contains(searchLower)) {
-          return false;
-        }
-      }
-
-      // Apply date filters if set
-      if (_fromDate != null || _toDate != null) {
-        if (_fromDate != null && order.orderDate.isBefore(_fromDate!)) {
-          return false;
-        }
-
-        if (_toDate != null) {
-          // Add one day to _toDate to include the end date in the filter
-          final toDatePlusOne = _toDate!.add(const Duration(days: 1));
-          if (order.orderDate.isAfter(toDatePlusOne)) {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    }).toList();
+  // Apply search and filters
+  void _applyFilters() {
+    _loadOrders();
   }
 
-  // Convert SalesOrder to the format expected by the list/table views
-  List<Map<String, dynamic>> _convertOrdersToViewFormat(List<SalesOrder> orders) {
+  // Reset all filters
+  void _resetFilters() {
+    setState(() {
+      _selectedStatus = 'All';
+      _searchController.text = '';
+      _searchQuery = '';
+      _fromDate = null;
+      _toDate = null;
+    });
+    
+    _loadOrders();
+  }
+
+  // Convert order data to format expected by the list/table views
+  List<Map<String, dynamic>> _convertOrdersToViewFormat(List<dynamic> orders) {
     return orders.map((order) {
+      // Parse the amount properly
+      double amount = 0;
+      if (order['Amt_to_Customer'] != null) {
+        amount = order['Amt_to_Customer'] is double
+            ? order['Amt_to_Customer']
+            : double.tryParse(order['Amt_to_Customer'].toString()) ?? 0;
+      }
+      
+      // Parse dates
+      String dateStr = order['Order_Date'] != null 
+          ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order['Order_Date']))
+          : '';
+      
       return {
-        'id': order.no,
-        'customerName': order.customerName ?? order.customerNo,
-        'date': DateFormat('dd/MM/yyyy').format(order.orderDate),
-        'amount': '₹${_calculateOrderAmount(order)}',
-        'status': order.status,
+        'id': order['No'] as String,
+        'customerName': order['Sell_to_Customer_Name'] ?? order['Sell_to_Customer_No'] ?? 'Unknown',
+        'date': dateStr,
+        'amount': '₹${amount.toStringAsFixed(0)}',
+        'status': order['Status'] as String? ?? 'Unknown',
       };
     }).toList();
-  }
-
-  // Placeholder for calculating order amount
-  // In a real app, this would come from the API or from line items
-  String _calculateOrderAmount(SalesOrder order) {
-    // This is just a mock calculation
-    return (10000 + order.no.hashCode % 40000).toString();
   }
 
   @override
@@ -194,9 +224,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 600;
 
-    // Get filtered orders based on applied filters
-    final filteredOrders = _getFilteredOrders();
-    final viewOrders = _convertOrdersToViewFormat(filteredOrders);
+    // Convert orders to view format
+    final viewOrders = _convertOrdersToViewFormat(_allOrders);
 
     return Scaffold(
       appBar: CommonAppBar(
@@ -236,7 +265,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
             // Orders list or empty state
             Expanded(
-              child: filteredOrders.isEmpty
+              child: _allOrders.isEmpty
                   ? _buildEmptyState()
                   : Padding(
                 padding: const EdgeInsets.all(16),
@@ -286,6 +315,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       _searchController.clear();
                       _searchQuery = '';
                     });
+                    _applyFilters();
                   },
                 )
                     : null,
@@ -299,6 +329,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   _searchQuery = value;
                 });
               },
+              onSubmitted: (_) => _applyFilters(),
             ),
           ),
           const SizedBox(width: 8),
@@ -517,14 +548,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         TextButton(
-          onPressed: () {
-            setState(() {
-              _selectedStatus = 'All';
-              _fromDate = null;
-              _toDate = null;
-            });
-          },
+          onPressed: _resetFilters,
           child: const Text('Reset'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _applyFilters,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF008000),
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Apply Filters'),
         ),
       ],
     );
@@ -551,15 +585,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           const SizedBox(height: 16),
           TextButton.icon(
-            onPressed: () {
-              setState(() {
-                _selectedStatus = 'All';
-                _searchController.clear();
-                _searchQuery = '';
-                _fromDate = null;
-                _toDate = null;
-              });
-            },
+            onPressed: _resetFilters,
             icon: const Icon(Icons.refresh),
             label: const Text('Reset Filters'),
           ),

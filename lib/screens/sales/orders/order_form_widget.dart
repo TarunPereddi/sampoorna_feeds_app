@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
 import '../../../models/customer.dart';
 import '../../../models/ship_to.dart';
 import '../../../models/location.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import 'searchable_dropdown.dart';
 
 class OrderFormWidget extends StatefulWidget {
@@ -42,6 +44,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
   bool _isLoadingCustomers = false;
   bool _isLoadingShipTo = false;
   bool _isLoadingLocations = false;
+  bool _isAddingShipTo = false;
 
   // For debounced customer search
   Timer? _debounce;
@@ -71,7 +74,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       });
     });
 
-    // Initial fetch of limited customers
+    // Initial fetch of limited customers and locations
     _fetchInitialCustomers();
     _fetchLocations();
 
@@ -97,6 +100,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
 
   Customer? _getCustomerByName(String customerName) {
     try {
+      if (customerName.contains(' - ')) {
+        // If the format is "Code - Name"
+        final customerCode = customerName.split(' - ').first.trim();
+        return _customers.firstWhere((customer) => customer.no == customerCode);
+      }
       return _customers.firstWhere((customer) => customer.name == customerName);
     } catch (e) {
       return null;
@@ -109,7 +117,18 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     });
 
     try {
-      final customersData = await _apiService.getCustomers(limit: 20);
+      // Get the sales person code from auth service
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final customersData = await _apiService.getCustomers(
+        limit: 20,
+        salesPersonCode: salesPerson.code,
+      );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
         _isLoadingCustomers = false;
@@ -132,7 +151,18 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     });
 
     try {
-      final customersData = await _apiService.getCustomers(searchQuery: query);
+      // Get the sales person code from auth service
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final customersData = await _apiService.getCustomers(
+        searchQuery: query,
+        salesPersonCode: salesPerson.code,
+      );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
         _isLoadingCustomers = false;
@@ -179,7 +209,24 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     });
 
     try {
-      final locationsData = await _apiService.getLocations();
+      // Get the sales person from auth service to access their locations
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+      
+      if (salesPerson == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Get the location codes from the sales person object
+      final locationCodes = salesPerson.locationCodes;
+      
+      if (locationCodes.isEmpty) {
+        throw Exception('No locations assigned to this user');
+      }
+
+      // Fetch only the locations assigned to the sales person
+      final locationsData = await _apiService.getLocations(locationCodes: locationCodes);
+      
       setState(() {
         _locations = locationsData.map((json) => Location.fromJson(json)).toList();
         _isLoadingLocations = false;
@@ -191,6 +238,45 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading locations: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addShipToAddress(Map<String, dynamic> shipToData) async {
+    setState(() {
+      _isAddingShipTo = true;
+    });
+
+    try {
+      await _apiService.createShipToAddress(shipToData);
+      
+      // Refresh the ship-to addresses list
+      await _fetchShipToAddresses(shipToData['Customer_No']);
+      
+      setState(() {
+        _isAddingShipTo = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ship-to address added successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isAddingShipTo = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding ship-to address: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -235,6 +321,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           label: 'Order Date',
           controller: _orderDateController,
           required: true,
+          isCurrentDate: true,
           onSelect: (date) {
             widget.onUpdate('orderDate', date);
           },
@@ -252,7 +339,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               : null,
           onChanged: (customer) {
             if (customer != null) {
-              widget.onUpdate('customer', customer.name);
+              widget.onUpdate('customer', '${customer.no} - ${customer.name}');
 
               // Generate sale code based on customer number
               final saleCode = 'SC-${customer.no}';
@@ -292,6 +379,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           label: 'Request Del. Date',
           controller: _deliveryDateController,
           required: true,
+          isCurrentDate: false,
           onSelect: (date) {
             widget.onUpdate('deliveryDate', date);
           },
@@ -348,7 +436,13 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           )
               : null,
           onChanged: (location) {
-            widget.onUpdate('location', location?.name);
+            if (location != null) {
+              widget.onUpdate('location', location.name);
+              widget.onUpdate('locationCode', location.code);
+            } else {
+              widget.onUpdate('location', null);
+              widget.onUpdate('locationCode', '');
+            }
           },
           required: true,
           displayStringForItem: (Location location) => '${location.code} - ${location.name}',
@@ -371,6 +465,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 label: 'Order Date',
                 controller: _orderDateController,
                 required: true,
+                isCurrentDate: true,
                 onSelect: (date) {
                   widget.onUpdate('orderDate', date);
                 },
@@ -389,7 +484,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                     : null,
                 onChanged: (customer) {
                   if (customer != null) {
-                    widget.onUpdate('customer', customer.name);
+                    widget.onUpdate('customer', '${customer.no} - ${customer.name}');
 
                     // Generate sale code based on customer number
                     final saleCode = 'SC-${customer.no}';
@@ -438,6 +533,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 label: 'Request Del. Date',
                 controller: _deliveryDateController,
                 required: true,
+                isCurrentDate: false,
                 onSelect: (date) {
                   widget.onUpdate('deliveryDate', date);
                 },
@@ -503,7 +599,13 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 )
                     : null,
                 onChanged: (location) {
-                  widget.onUpdate('location', location?.name);
+                  if (location != null) {
+                    widget.onUpdate('location', location.name);
+                    widget.onUpdate('locationCode', location.code);
+                  } else {
+                    widget.onUpdate('location', null);
+                    widget.onUpdate('locationCode', '');
+                  }
                 },
                 required: true,
                 displayStringForItem: (Location location) => '${location.code} - ${location.name}',
@@ -565,6 +667,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     required String label,
     required TextEditingController controller,
     bool required = false,
+    bool isCurrentDate = false, // If true, date cannot be before today
     required Function(DateTime) onSelect,
   }) {
     return Column(
@@ -597,14 +700,34 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               ? (value) => value == null || value.isEmpty ? 'This field is required' : null
               : null,
           onTap: () async {
+            // Set minimum date based on isCurrentDate flag
+            final DateTime now = DateTime.now();
+            final DateTime minDate = isCurrentDate ? now : DateTime(2020);
+            
             final DateTime? pickedDate = await showDatePicker(
               context: context,
-              initialDate: DateTime.now(),
-              firstDate: DateTime(2020),
+              initialDate: isCurrentDate ? now : (widget.orderData['orderDate'] ?? now),
+              firstDate: minDate,
               lastDate: DateTime(2030),
             );
 
             if (pickedDate != null) {
+              // For delivery date, ensure it's not before order date
+              if (!isCurrentDate && widget.orderData['orderDate'] != null) {
+                final orderDate = widget.orderData['orderDate'] as DateTime;
+                if (pickedDate.isBefore(orderDate)) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Delivery date cannot be before order date'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                  return;
+                }
+              }
+              
               setState(() {
                 controller.text = DateFormat('dd/MM/yyyy').format(pickedDate);
                 onSelect(pickedDate);
@@ -629,11 +752,16 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     Customer? selectedCustomer = _getCustomerByName(widget.orderData['customer']);
     if (selectedCustomer == null) return;
 
+    final TextEditingController codeController = TextEditingController();
     final TextEditingController nameController = TextEditingController();
     final TextEditingController addressController = TextEditingController();
+    final TextEditingController address2Controller = TextEditingController();
     final TextEditingController cityController = TextEditingController();
     final TextEditingController stateController = TextEditingController();
     final TextEditingController postcodeController = TextEditingController();
+
+    // Initialize name with customer name
+    nameController.text = selectedCustomer.name;
 
     showDialog(
       context: context,
@@ -644,9 +772,18 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: 'Code*',
+                  border: OutlineInputBorder(),
+                  helperText: 'Enter a unique code (e.g., MAIN, STORE1)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Name*',
+                  labelText: 'Name',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -658,6 +795,14 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: address2Controller,
+                decoration: const InputDecoration(
+                  labelText: 'Address 2',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -693,37 +838,65 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              if (nameController.text.isEmpty) {
+            onPressed: _isAddingShipTo ? null : () async {
+              // Validate required fields
+              if (codeController.text.isEmpty
+                 // nameController.text.isEmpty ||
+                 // addressController.text.isEmpty ||
+                 // cityController.text.isEmpty ||
+                 // stateController.text.isEmpty ||
+                 // postcodeController.text.isEmpty
+              ) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Name is required')),
+                  const SnackBar(content: Text('All fields marked with * are required')),
                 );
                 return;
               }
 
-              // Here you would call the API to create a new ship-to address
-              // For now, we'll just show a success message
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('New ship-to address added successfully')),
-              );
+              // Check if code already exists
+              final existingCode = _shipToLocations.any((shipTo) => 
+                shipTo.code.toLowerCase() == codeController.text.toLowerCase());
+              
+              if (existingCode) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('This code already exists. Please use a unique code.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
 
-              // Refresh ship-to addresses after adding new one
-              _fetchShipToAddresses(selectedCustomer.no);
+              // Prepare ship-to data for API
+              final shipToData = {
+                'Customer_No': selectedCustomer.no,
+                'Code': codeController.text.trim(),
+                'Name': nameController.text.trim(),
+                'Address': addressController.text.trim(),
+                'Address_2': address2Controller.text.trim(),
+                'State': stateController.text.trim(),
+                'City': cityController.text.trim(),
+                'Post_Code': postcodeController.text.trim(),
+              };
+
+              // Submit the data
+              Navigator.pop(context);
+              _addShipToAddress(shipToData);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF008000),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Save'),
+            child: _isAddingShipTo
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : const Text('Save'),
           ),
         ],
       ),
     );
-  }
-
-  // Helper for min function
-  int min(int a, int b) {
-    return a < b ? a : b;
   }
 }

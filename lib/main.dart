@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/customer/customer_shell.dart';
 import 'screens/vendor/vendor_shell.dart';
 import 'screens/sales/sales_shell.dart';
+import 'services/auth_service.dart';
 
 void main() {
-  runApp(const SampoornaFeedsApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()),
+      ],
+      child: const SampoornaFeedsApp(),
+    ),
+  );
 }
 
 class SampoornaFeedsApp extends StatelessWidget {
