@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 class ApiService {
   static const String baseUrl = 'http://api.sampoornafeeds.in:4052/BCtest/ODataV4';
@@ -59,11 +60,18 @@ class ApiService {
     debugPrint('POST Body: $body');
 
     try {
+      // Ensure proper content-type header for JSON
+      Map<String, String> headers = _headers;
+      headers['Content-Type'] = 'application/json';
+      
       final response = await http.post(
         uri,
-        headers: _headers,
+        headers: headers,
         body: json.encode(body),
       );
+      
+      debugPrint('POST Response Status: ${response.statusCode}');
+      debugPrint('POST Response Body: ${response.body}');
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return json.decode(response.body);
@@ -148,6 +156,83 @@ class ApiService {
   // Create a new ship-to address
   Future<dynamic> createShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('ShiptoAddress', body: shipToData);
+  }
+  
+  // Get units of measurement for a specific item
+  Future<List<dynamic>> getItemUnitsOfMeasure(String itemNo) async {
+    if (itemNo.isEmpty) {
+      return [];
+    }
+
+    Map<String, String> queryParams = {'\$filter': "Item_No eq '$itemNo'"};
+    
+    try {
+      final response = await get('ItemUnitofMeasure', queryParams: queryParams);
+      return response['value'];
+    } catch (e) {
+      print('Error fetching units of measure: $e');
+      return [];
+    }
+  }
+
+  // Get sales price for an item based on customer price group, location, and UOM
+  Future<Map<String, dynamic>?> getSalesPrice({
+    required String itemNo,
+    required String customerPriceGroup,
+    required String locationCode,
+    required String unitOfMeasure,
+  }) async {
+    if (itemNo.isEmpty || customerPriceGroup.isEmpty || locationCode.isEmpty || unitOfMeasure.isEmpty) {
+      print('Missing required parameters for getSalesPrice');
+      return null;
+    }
+
+    try {
+      // Create the request body - all values as strings
+      Map<String, String> body = {
+        "salesType": "1", // Fixed value, as a string
+        "salesCode": customerPriceGroup,
+        "itemNo": itemNo,
+        "location": locationCode,
+        "unitofmeasure": unitOfMeasure,
+        "orderDate": DateFormat('yyyy-MM-dd').format(DateTime.now()), // Today's date
+      };
+      
+      print('Sales Price API Request Body: $body');
+      
+      // Make the POST request
+      final response = await post('Barcode_Web_Services_SalesPriceAPI', body: body);
+      
+      // Log the full response for debugging
+      print('Sales Price API Raw Response: $response');
+      
+      // Check if we have valid data and parse the JSON
+      if (response['value'] != null) {
+        String jsonString = response['value'] as String;
+        
+        try {
+          // Parse the JSON string into a Map
+          Map<String, dynamic> parsedData = jsonDecode(jsonString);
+          
+          if (parsedData.containsKey('Response')) {
+            print('Parsed Sales Price Data: ${parsedData['Response']}');
+            return parsedData['Response'];
+          } else {
+            print('Response key not found in parsed data: $parsedData');
+          }
+        } catch (parseError) {
+          print('Error parsing Sales Price JSON: $parseError');
+          print('Raw JSON string: $jsonString');
+        }
+      } else {
+        print('No value found in response: $response');
+      }
+      
+      return null;
+    } catch (e) {
+      print('Error fetching sales price: $e');
+      return null;
+    }
   }
 
   // Get locations filtered by location codes
@@ -239,8 +324,75 @@ class ApiService {
     return response['value'];
   }
   
-  // Create a sales order
-  Future<dynamic> createSalesOrder(Map<String, dynamic> orderData) async {
-    return await post('SalesOrder', body: orderData);
+
+  /// Creates a sales order header and returns the order details
+  Future<Map<String, dynamic>> createSalesOrder({
+    required String customerNo,
+    required String shipToCode,
+    required String locationCode,
+    required String salesPersonCode,
+  }) async {
+    // Create request body
+    Map<String, dynamic> body = {
+      "Sell_to_Customer_No": customerNo,
+      "Ship_to_Code": shipToCode,
+      "Salesperson_Code": salesPersonCode,
+      "Location_Code": locationCode,
+      "Invoice_Type": "Bill of Supply",
+      "created_from_web": true
+    };
+    
+    debugPrint('Creating sales order: $body');
+    
+    try {
+      final response = await post('SalesOrder', body: body);
+      
+      // Log the response for debugging
+      debugPrint('Sales Order Creation Response: $response');
+      
+      if (response != null) {
+        return response;
+      } else {
+        throw Exception('Empty response received when creating sales order');
+      }
+    } catch (e) {
+      debugPrint('Error creating sales order: $e');
+      throw Exception('Failed to create sales order: $e');
+    }
+  }
+
+  /// Adds a line item to an existing sales order
+  Future<Map<String, dynamic>> addSalesOrderLine({
+    required String documentNo,
+    required String itemNo,
+    required String locationCode,
+    required int quantity,
+  }) async {
+    // Create request body
+    Map<String, dynamic> body = {
+      "Document_No": documentNo,
+      "Type": "Item",
+      "No": itemNo,
+      "Location_Code": locationCode,
+      "Quantity": quantity
+    };
+    
+    debugPrint('Adding sales order line: $body');
+    
+    try {
+      final response = await post('SalesLine', body: body);
+      
+      // Log the response for debugging
+      debugPrint('Sales Line Creation Response: $response');
+      
+      if (response != null) {
+        return response;
+      } else {
+        throw Exception('Empty response received when adding sales order line');
+      }
+    } catch (e) {
+      debugPrint('Error adding sales order line: $e');
+      throw Exception('Failed to add sales order line: $e');
+    }
   }
 }

@@ -121,8 +121,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                _buildPersonaSegment('Customer', 'customer', Icons.people),
-                                _buildPersonaSegment('Vendor', 'vendor', Icons.store),
+                                _buildPersonaSegment('Customer', 'customer', Icons.people, isDisabled: true),
+                                _buildPersonaSegment('Vendor', 'vendor', Icons.store, isDisabled: true),
                                 _buildPersonaSegment('Sales', 'sales', Icons.business_center),
                               ],
                             ),
@@ -175,19 +175,25 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildPersonaSegment(String title, String value, IconData icon) {
+  Widget _buildPersonaSegment(String title, String value, IconData icon, {bool isDisabled = false}) {
     bool isSelected = _selectedPersona == value;
+    
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          setState(() {
-            _selectedPersona = value;
-          });
+          if (isDisabled) {
+            // Show "Coming Soon" popup for disabled options
+            _showComingSoonDialog(title);
+          } else {
+            setState(() {
+              _selectedPersona = value;
+            });
+          }
         },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? Theme.of(context).primaryColor : Colors.transparent,
+            color: isSelected && !isDisabled ? Theme.of(context).primaryColor : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
@@ -195,21 +201,56 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : Colors.grey,
+                color: isDisabled 
+                    ? Colors.grey.shade400 
+                    : isSelected 
+                        ? Colors.white 
+                        : Colors.grey,
                 size: 24,
               ),
               const SizedBox(height: 4),
               Text(
                 title,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isDisabled 
+                      ? Colors.grey.shade400 
+                      : isSelected 
+                          ? Colors.white 
+                          : Colors.grey,
+                  fontWeight: isSelected && !isDisabled ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showComingSoonDialog(String featureType) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.schedule, color: Theme.of(context).primaryColor),
+              const SizedBox(width: 8),
+              Text('$featureType Portal Coming Soon'),
+            ],
+          ),
+          content: const Text(
+            'We\'re working hard to bring you this feature. Please check back soon!',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
   }
 

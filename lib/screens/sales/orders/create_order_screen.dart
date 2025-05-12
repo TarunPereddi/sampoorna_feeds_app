@@ -26,8 +26,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     'orderDate': DateTime.now(),
     'deliveryDate': null,
     'customer': null,
+    'customerNo': null,
+    'customerPriceGroup': null,
     'saleCode': '',
     'shipTo': null,
+    'shipToCode': '', // Added to store the actual code for API
     'location': null,
     'locationCode': '',
     'items': <Map<String, dynamic>>[],
@@ -39,6 +42,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   // Loading state
   bool _isLoading = false;
   bool _isSubmitting = false;
+  String _submissionStatus = ''; // Track submission status for user feedback
 
   @override
   void initState() {
@@ -205,8 +209,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   // Process the order submission
   Future<void> _processOrderSubmission() async {
+    // Set a flag to track if this widget is still mounted before showing dialogs
+    bool isCurrentlyMounted = true;
+    
     setState(() {
       _isSubmitting = true;
+      _submissionStatus = 'Preparing order submission...';
     });
 
     try {
@@ -218,82 +226,184 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         throw Exception('User not authenticated');
       }
 
-      // Extract customer number from the selected customer
-      String? customerNo;
-      if (_orderData['customer'] != null && _orderData['customer'].contains(' - ')) {
-        customerNo = _orderData['customer'].split(' - ').first.trim();
-      }
-      
-      if (customerNo == null) {
+      // Extract customer number
+      String customerNo = _orderData['customerNo'] ?? '';
+      if (customerNo.isEmpty) {
         throw Exception('Invalid customer selection');
       }
 
-      // Prepare order data for API
-      final Map<String, dynamic> orderPayload = {
-        'Document_Type': 'Order',
-        'Sell_to_Customer_No': customerNo,
-        'Order_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
-        'Posting_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
-        'Document_Date': DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
-        'Requested_Delivery_Date': _orderData['deliveryDate'] != null 
-            ? DateFormat('yyyy-MM-dd').format(_orderData['deliveryDate'])
-            : DateFormat('yyyy-MM-dd').format(_orderData['orderDate']),
-        'Salesperson_Code': salesPerson.code,
-        'Location_Code': _orderData['locationCode'],
-        'Status': 'Open',
-        'lines': _orderData['items'].map((item) => {
-          'Type': 'Item',
-          'No': item['itemNo'],
-          'Description': item['itemDescription'],
-          'Quantity': item['quantity'],
-          'Unit_of_Measure': item['unitOfMeasure'],
-          'Unit_Price': item['price'],
-        }).toList(),
-      };
-
-      // In a real app, you would call the API service
-      debugPrint('Order Payload: $orderPayload');
+      // Get the ship-to code
+      String shipToCode = _orderData['shipToCode'] ?? '';
       
-      // Simulate API call for now
-      await Future.delayed(const Duration(seconds: 2));
-      
-      // await _apiService.createSalesOrder(orderPayload);
+      // Extract location code
+      String locationCode = _orderData['locationCode'] ?? '';
+      if (locationCode.isEmpty) {
+        throw Exception('Invalid location selection');
+      }
 
+      // 1. Create the Sales Order Header
+      _updateSubmissionStatus('Creating order...');
+      
+      // Wrap API calls in try-catch blocks to handle individual failures
+      Map<String, dynamic> salesOrderResponse;
+      try {
+        salesOrderResponse = await _apiService.createSalesOrder(
+          customerNo: customerNo,
+          shipToCode: shipToCode,
+          locationCode: locationCode,
+          salesPersonCode: salesPerson.code,
+        );
+      } catch (headerError) {
+        print('Error creating sales order header: $headerError');
+        throw Exception('Failed to create order: ${_getReadableErrorMessage(headerError)}');
+      }
+      
+      // Extract the order number from the response
+      final orderNo = salesOrderResponse['No'];
+      if (orderNo == null || orderNo.isEmpty) {
+        throw Exception('Order number not received from server');
+      }
+      
+      // Check if widget is still mounted before updating UI
+      if (!mounted) {
+        isCurrentlyMounted = false;
+        return;
+      }
+      
+      _updateSubmissionStatus('Order created: $orderNo');
+      
+      // 2. Add Sales Order Lines for each item
+      List<String> failedItems = [];
+      
+      for (int i = 0; i < _orderData['items'].length; i++) {
+        if (!mounted) {
+          isCurrentlyMounted = false;
+          return;
+        }
+        
+        final item = _orderData['items'][i];
+        _updateSubmissionStatus('Adding item ${i+1} of ${_orderData['items'].length}: ${item['itemDescription']}...');
+        
+        // Convert quantity to integer as required by the API
+        final int quantity = item['quantity'].round();
+        
+        try {
+          await _apiService.addSalesOrderLine(
+            documentNo: orderNo,
+            itemNo: item['itemNo'],
+            locationCode: locationCode,
+            quantity: quantity,
+          );
+          
+          _updateSubmissionStatus('Added item ${i+1}: ${item['itemDescription']}');
+        } catch (itemError) {
+          // Log error but continue with next item
+          print('Error adding item ${item['itemNo']}: $itemError');
+          failedItems.add('${item['itemDescription']} (${item['itemNo']})');
+          _updateSubmissionStatus('Failed to add item ${i+1}: ${item['itemDescription']}');
+        }
+      }
+      
+      // Check if widget is still mounted before wrapping up
+      if (!mounted) {
+        isCurrentlyMounted = false;
+        return;
+      }
+      
+      // Order completed - check if any items failed
       setState(() {
         _isSubmitting = false;
+        if (failedItems.isEmpty) {
+          _submissionStatus = 'Order submitted successfully!';
+        } else {
+          _submissionStatus = 'Order created with some issues';
+        }
       });
 
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order submitted successfully!'),
-            backgroundColor: Color(0xFF008000),
-          ),
-        );
-
-        // Navigate back after short delay
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          Navigator.pop(context);
-        });
+      // Show appropriate message
+      if (isCurrentlyMounted) {
+        if (failedItems.isEmpty) {
+          // All items added successfully
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Order submitted successfully!'),
+              backgroundColor: Color(0xFF008000),
+            ),
+          );
+          
+          // Show order summary dialog
+          _showOrderSummaryDialog(orderNo);
+        } else {
+          // Some items failed, show partial success dialog
+          _showPartialSuccessDialog(orderNo, failedItems);
+        }
       }
     } catch (e) {
+      // Check if widget is still mounted before updating UI
+      if (!mounted) {
+        return;
+      }
+      
+      print('Order submission error: $e');
+      
       setState(() {
         _isSubmitting = false;
+        _submissionStatus = 'Error: ${_getReadableErrorMessage(e)}';
       });
 
-      // Show error message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error submitting order: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      // Show error message dialog instead of snackbar for more visibility
+      if (isCurrentlyMounted) {
+        try {
+          _showErrorDialog(_getReadableErrorMessage(e));
+        } catch (dialogError) {
+          // Last resort error handling
+          print('Error showing error dialog: $dialogError');
+          // Try to show at least a snackbar
+          try {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to place order: ${_getReadableErrorMessage(e)}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } catch (snackbarError) {
+            print('Failed to show snackbar: $snackbarError');
+          }
+        }
       }
     }
   }
 
+  // Helper method to update the submission status
+  void _updateSubmissionStatus(String status) {
+    if (mounted) {
+      setState(() {
+        _submissionStatus = status;
+      });
+    }
+  }
+
+  // Handle API errors with user-friendly messages
+  String _getReadableErrorMessage(dynamic error) {
+    String errorMessage = error.toString();
+
+    // Check for specific error patterns and provide friendly messages
+    if (errorMessage.contains('Failed to connect')) {
+      return 'Could not connect to the server. Please check your internet connection.';
+    } else if (errorMessage.contains('timed out')) {
+      return 'Request timed out. Please try again.';
+    } else if (errorMessage.contains('400')) {
+      return 'Invalid request. Please check your order details.';
+    } else if (errorMessage.contains('401') || errorMessage.contains('403')) {
+      return 'Authentication error. Please log in again.';
+    } else if (errorMessage.contains('500')) {
+      return 'Server error. Please try again later.';
+    }
+
+    // If no specific pattern is found, return a more user-friendly version of the error
+    return errorMessage.replaceAll('Exception: ', '');
+  }
+  
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -321,88 +431,93 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ],
       ),
       body: _isSubmitting
-          ? const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: Color(0xFF008000)),
-            SizedBox(height: 16),
-            Text('Processing your order...'),
-          ],
-        ),
-      )
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: Color(0xFF008000)),
+                  const SizedBox(height: 24),
+                  Text(
+                    _submissionStatus,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            )
           : Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          controller: _orderFormScrollController,
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title
-              const Text(
-                'Create Customer Order',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Order Information Form
-              OrderFormWidget(
-                orderData: _orderData,
-                isSmallScreen: isSmallScreen,
-                onUpdate: _handleFormUpdate,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Item Entry Form
-              OrderItemFormWidget(
-                isSmallScreen: isSmallScreen,
-                onAddItem: addItemToOrder,
-                locationCode: _orderData['locationCode'],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Order Items List
-              OrderItemsListWidget(
-                items: _orderData['items'],
-                isSmallScreen: isSmallScreen,
-                onRemoveItem: removeItemFromOrder,
-                onClearAll: clearAllItems,
-                totalAmount: _orderTotal,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Submit Button
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: _submitOrder,
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  label: const Text(
-                    'Submit Order',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C5F2D),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              key: _formKey,
+              child: SingleChildScrollView(
+                controller: _orderFormScrollController,
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    const Text(
+                      'Create Customer Order',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+
+                    // Order Information Form
+                    OrderFormWidget(
+                      orderData: _orderData,
+                      isSmallScreen: isSmallScreen,
+                      onUpdate: _handleFormUpdate,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Item Entry Form
+                    OrderItemFormWidget(
+                      isSmallScreen: isSmallScreen,
+                      onAddItem: addItemToOrder,
+                      locationCode: _orderData['locationCode'],
+                      customerPriceGroup: _orderData['customerPriceGroup'],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Order Items List
+                    OrderItemsListWidget(
+                      items: _orderData['items'],
+                      isSmallScreen: isSmallScreen,
+                      onRemoveItem: removeItemFromOrder,
+                      onClearAll: clearAllItems,
+                      totalAmount: _orderTotal,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Submit Button
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed: _submitOrder,
+                        icon: const Icon(Icons.send, color: Colors.white),
+                        label: const Text(
+                          'Submit Order',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2C5F2D),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
@@ -435,6 +550,267 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ],
       ),
     );
+  }
+
+  // Show order summary dialog
+  void _showOrderSummaryDialog(String orderNo) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap button to close dialog
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green, size: 28),
+              const SizedBox(width: 8),
+              const Text('Order Placed Successfully'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Order Number: $orderNo', 
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                
+                Text('Customer: ${_orderData['customer']}'),
+                Text('Location: ${_orderData['location']}'),
+                
+                const Divider(height: 24),
+                
+                const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                
+                // List all items
+                ..._orderData['items'].map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• '),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${item['itemDescription']} (${item['itemNo']})'),
+                            Text(
+                              '${item['quantity']} ${item['unitOfMeasure']} x ₹${item['price'].toStringAsFixed(2)} = ₹${item['totalAmount'].toStringAsFixed(2)}',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )).toList(),
+                
+                const Divider(height: 24),
+                
+                // Total amount
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total Amount:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      '₹${_orderTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              child: const Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Return to previous screen
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF008000),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Show partial success dialog when some items failed to be added
+  void _showPartialSuccessDialog(String orderNo, List<String> failedItems) {
+    // Use try-catch to handle any widget tree issues
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange, size: 28),
+                SizedBox(width: 8),
+                Text('Order Created With Issues'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Order Number: $orderNo', 
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 16),
+                  
+                  Text(
+                    'The order was created, but some items could not be added:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  SizedBox(height: 8),
+                  
+                  // List failed items
+                  ...failedItems.map((item) => Padding(
+                    padding: EdgeInsets.only(bottom: 4.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('• ', style: TextStyle(color: Colors.red)),
+                        Expanded(child: Text(item, style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  )).toList(),
+                  
+                  SizedBox(height: 16),
+                  Text(
+                    'Please note the order number and contact support if needed.',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                child: Text('Close'),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Return to previous screen
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      // If dialog fails, try a simple snackbar as fallback
+      print('Error showing partial success dialog: $e');
+      try {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order created with some issues. Order #: $orderNo'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      } catch (snackbarError) {
+        print('Failed to show snackbar: $snackbarError');
+      }
+    }
+  }
+
+  // Show error dialog when order creation fails
+  void _showErrorDialog(String errorMessage) {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red, size: 28),
+                SizedBox(width: 8),
+                Text('Order Submission Failed'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'We couldn\'t create your order due to the following error:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Text(
+                      errorMessage,
+                      style: TextStyle(color: Colors.red.shade800),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'What to do next:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  SizedBox(height: 8),
+                  Text('• Check your internet connection'),
+                  Text('• Verify all order details are correct'),
+                  Text('• Try again in a few moments'),
+                  Text('• Contact support if the issue persists'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: Text('Try Again'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                child: Text('Go Back'),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Return to previous screen
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      // If dialog fails, use a snackbar as fallback
+      print('Error showing error dialog: $e');
+      try {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to place order: $errorMessage'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      } catch (snackbarError) {
+        print('Failed to show snackbar: $snackbarError');
+      }
+    }
   }
 
   @override

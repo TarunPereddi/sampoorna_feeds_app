@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../models/item.dart';
+import '../../../models/item_unit_of_measure.dart'; // Import the new model
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import 'searchable_dropdown.dart';
@@ -10,12 +11,14 @@ class OrderItemFormWidget extends StatefulWidget {
   final bool isSmallScreen;
   final Function(Map<String, dynamic>) onAddItem;
   final String? locationCode;
+  final String? customerPriceGroup; // Add this parameter
 
   const OrderItemFormWidget({
     super.key,
     required this.isSmallScreen,
     required this.onAddItem,
     this.locationCode,
+    this.customerPriceGroup, // Add to constructor
   });
 
   @override
@@ -46,16 +49,16 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   double _price = 0;
   double _totalAmount = 0;
 
-  // Loading state for items
+  // Loading states
   bool _isLoadingItems = false;
-  List<Item> _items = [];
-
-  // Units of measure (mock data for now)
-  final List<String> _unitsOfMeasure = [
+  bool _isLoadingUoM = false;
+  bool _isLoadingPrice = false; // New loading state for price fetching
+  
+  // Fallback units of measure for when API doesn't return any units
+  final List<String> _fallbackUnitsOfMeasure = [
     'Bag',
     'Kg',
     'Box',
-    'KG BAG',
     '50 KG BAG',
     'Ton',
     'Packet',
@@ -64,6 +67,12 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     'Pallet',
   ];
 
+  // Items list
+  List<Item> _items = [];
+
+  // Units of measure
+  List<ItemUnitOfMeasure> _itemUnitsOfMeasure = [];
+  
   @override
   void initState() {
     super.initState();
@@ -159,6 +168,96 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     }
   }
 
+  // New method to fetch units of measure for a specific item
+  Future<void> _fetchUnitsOfMeasure(String itemNo) async {
+    if (itemNo.isEmpty) return;
+    
+    setState(() {
+      _isLoadingUoM = true;
+      _itemUnitsOfMeasure = []; // Clear previous units
+    });
+    
+    try {
+      final uomData = await _apiService.getItemUnitsOfMeasure(itemNo);
+      setState(() {
+        _itemUnitsOfMeasure = uomData.map((json) => ItemUnitOfMeasure.fromJson(json)).toList();
+        _isLoadingUoM = false;
+        
+        // If no UoM data returned from API, use the fallback list
+        if (_itemUnitsOfMeasure.isEmpty) {
+          return;
+        }
+        
+        // If no UoM selected yet but we have units, set the default one
+        if (_selectedUnitOfMeasure == null && _itemUnitsOfMeasure.isNotEmpty) {
+          // Prefer to use the Sales Unit of Measure if it exists in the list
+          if (_selectedItem != null && _selectedItem!.salesUnitOfMeasure != null) {
+            final defaultUoMIndex = _itemUnitsOfMeasure.indexWhere(
+              (uom) => uom.code == _selectedItem!.salesUnitOfMeasure,
+            );
+            
+            if (defaultUoMIndex >= 0) {
+              _selectedUnitOfMeasure = _itemUnitsOfMeasure[defaultUoMIndex].code;
+            } else {
+              _selectedUnitOfMeasure = _itemUnitsOfMeasure.first.code;
+            }
+          } else {
+            _selectedUnitOfMeasure = _itemUnitsOfMeasure.first.code;
+          }
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingUoM = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading units of measure: $e')),
+        );
+      }
+    }
+  }
+  
+  // Method to handle item selection
+  void _handleItemSelected(Item? item) {
+    setState(() {
+      _selectedItem = item;
+      if (item != null) {
+        // Set MRP value from the item
+        _mrp = item.unitPrice;
+        _mrpController.text = _mrp.toString();
+
+        // Set default price as MRP initially
+        _price = _mrp;
+        _priceController.text = _price.toString();
+
+        // Set default Unit of Measure from the item's sales unit of measure if available
+        if (item.salesUnitOfMeasure != null) {
+          _selectedUnitOfMeasure = item.salesUnitOfMeasure;
+        } else if (item.description.contains('KG BAG')) {
+          _selectedUnitOfMeasure = '50 KG BAG';
+        } else {
+          _selectedUnitOfMeasure = 'Kg';
+        }
+        
+        // Calculate total if quantity is set
+        _calculateItemTotal();
+        
+        // Fetch available Units of Measure
+        _fetchUnitsOfMeasure(item.no);
+
+        // Fetch sales price if we have all the required information
+        if (_selectedUnitOfMeasure != null && 
+            widget.locationCode != null && 
+            widget.locationCode!.isNotEmpty &&
+            widget.customerPriceGroup != null && 
+            widget.customerPriceGroup!.isNotEmpty) {
+          _fetchSalesPrice();
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _quantityController.dispose();
@@ -212,6 +311,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       );
       return;
     }
+    
+    // Price validation removed - allowing any price including zero
 
     final Map<String, dynamic> newItem = {
       'itemNo': _selectedItem!.no,
@@ -225,6 +326,101 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
 
     widget.onAddItem(newItem);
     _resetItemForm();
+  }
+
+  // Fetch sales price based on customer price group, location, and UOM
+  Future<void> _fetchSalesPrice() async {
+    if (!mounted) return; // Check if widget is still mounted
+    
+    if (_selectedItem == null || _selectedUnitOfMeasure == null || 
+        widget.locationCode == null || widget.locationCode!.isEmpty ||
+        widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty) {
+      return;
+    }
+    
+    setState(() {
+      _isLoadingPrice = true; // Start loading
+    });
+    
+    try {
+      print('Fetching price for: Item=${_selectedItem!.no}, UoM=$_selectedUnitOfMeasure, Location=${widget.locationCode}, PriceGroup=${widget.customerPriceGroup}');
+      
+      final priceData = await _apiService.getSalesPrice(
+        itemNo: _selectedItem!.no,
+        customerPriceGroup: widget.customerPriceGroup!,
+        locationCode: widget.locationCode!,
+        unitOfMeasure: _selectedUnitOfMeasure!,
+      );
+      
+      if (!mounted) return; // Check again after async operation
+      
+      if (priceData != null && priceData.containsKey('Unit_Price')) {
+        setState(() {
+          // Get the price from the API response
+          if (priceData['Unit_Price'] != null) {
+            _price = priceData['Unit_Price'] is int
+                ? (priceData['Unit_Price'] as int).toDouble()
+                : priceData['Unit_Price'] as double;
+            _priceController.text = _price.toString();
+          }
+          
+          // Get the MRP from the API response
+          if (priceData['MRP'] != null) {
+            _mrp = priceData['MRP'] is int
+                ? (priceData['MRP'] as int).toDouble()
+                : priceData['MRP'] as double;
+            _mrpController.text = _mrp.toString();
+          }
+          
+          // Recalculate total amount
+          _calculateItemTotal();
+          _isLoadingPrice = false;
+        });
+      } else {
+        if (!mounted) return; // Check again
+        
+        setState(() {
+          _isLoadingPrice = false;
+        });
+        
+        // Show error message if price data is not found
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot get price. Please try again later.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return; // Check again
+      
+      print('Error fetching sales price: $e');
+      
+      setState(() {
+        _isLoadingPrice = false;
+      });
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot get price: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Set default price when sales price API doesn't return valid data
+  void _setDefaultPrice() {
+    // If we have an MRP, use that
+    if (_mrp > 0) {
+      _price = _mrp;
+    } else {
+      // Otherwise use a default value
+      _price = 1000.0; // Default price as specified
+    }
+    _priceController.text = _price.toString();
+    _calculateItemTotal();
   }
 
   @override
@@ -329,30 +525,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                 label: 'Item',
                 items: _items,
                 selectedItem: _selectedItem,
-                onChanged: (item) {
-                  setState(() {
-                    _selectedItem = item;
-                    if (item != null) {
-                      // Set MRP value from the item
-                      _mrp = item.unitPrice;
-                      _mrpController.text = _mrp.toString();
-
-                      // Set default price as MRP
-                      _price = _mrp;
-                      _priceController.text = _price.toString();
-
-                      // Set default unit of measure based on item's sales unit of measure if available
-                      if (item.toString().contains('KG BAG')) {
-                        _selectedUnitOfMeasure = '50 KG BAG';
-                      } else {
-                        _selectedUnitOfMeasure = 'Kg';
-                      }
-
-                      // Calculate total if quantity is set
-                      _calculateItemTotal();
-                    }
-                  });
-                },
+                onChanged: _handleItemSelected,
                 required: true,
                 displayStringForItem: (Item item) => '${item.no} - ${item.description}',
                 searchController: _itemSearchController,
@@ -363,18 +536,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         const SizedBox(height: 16),
 
         // Unit of Measure
-        SearchableDropdown<String>(
-          label: 'Unit of Measure',
-          items: _unitsOfMeasure,
-          selectedItem: _selectedUnitOfMeasure,
-          onChanged: (value) {
-            setState(() {
-              _selectedUnitOfMeasure = value;
-            });
-          },
-          required: true,
-          displayStringForItem: (String uom) => uom,
-        ),
+        _buildUnitOfMeasureDropdown(),
         const SizedBox(height: 16),
 
         // Quantity
@@ -385,18 +547,21 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         ),
         const SizedBox(height: 16),
 
-        // MRP
+        // MRP - now non-editable with loading state
         _buildNumberField(
           label: 'MRP',
           controller: _mrpController,
           enabled: false,
+          isLoading: _isLoadingPrice,
         ),
         const SizedBox(height: 16),
 
-        // Price
+        // Unit Price - now non-editable with loading state
         _buildNumberField(
-          label: 'Price',
+          label: 'Unit Price',
           controller: _priceController,
+          enabled: false,
+          isLoading: _isLoadingPrice,
         ),
         const SizedBox(height: 16),
 
@@ -427,30 +592,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                       label: 'Item',
                       items: _items,
                       selectedItem: _selectedItem,
-                      onChanged: (item) {
-                        setState(() {
-                          _selectedItem = item;
-                          if (item != null) {
-                            // Set MRP value from the item
-                            _mrp = item.unitPrice;
-                            _mrpController.text = _mrp.toString();
-
-                            // Set default price as MRP
-                            _price = _mrp;
-                            _priceController.text = _price.toString();
-
-                            // Set default unit of measure based on item's sales unit of measure if available
-                            if (item.toString().contains('KG BAG')) {
-                              _selectedUnitOfMeasure = '50 KG BAG';
-                            } else {
-                              _selectedUnitOfMeasure = 'Kg';
-                            }
-
-                            // Calculate total if quantity is set
-                            _calculateItemTotal();
-                          }
-                        });
-                      },
+                      onChanged: _handleItemSelected,
                       required: true,
                       displayStringForItem: (Item item) => '${item.no} - ${item.description}',
                       searchController: _itemSearchController,
@@ -463,18 +605,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             // Unit of Measure
             Expanded(
               flex: 1,
-              child: SearchableDropdown<String>(
-                label: 'Unit of Measure',
-                items: _unitsOfMeasure,
-                selectedItem: _selectedUnitOfMeasure,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedUnitOfMeasure = value;
-                  });
-                },
-                required: true,
-                displayStringForItem: (String uom) => uom,
-              ),
+              child: _buildUnitOfMeasureDropdown(),
             ),
           ],
         ),
@@ -493,20 +624,23 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
               ),
             ),
             const SizedBox(width: 16),
-            // MRP
+            // MRP - now non-editable with loading state
             Expanded(
               child: _buildNumberField(
                 label: 'MRP',
                 controller: _mrpController,
                 enabled: false,
+                isLoading: _isLoadingPrice,
               ),
             ),
             const SizedBox(width: 16),
-            // Price
+            // Unit Price - now non-editable with loading state
             Expanded(
               child: _buildNumberField(
-                label: 'Price',
+                label: 'Unit Price',
                 controller: _priceController,
+                enabled: false,
+                isLoading: _isLoadingPrice,
               ),
             ),
             const SizedBox(width: 16),
@@ -530,6 +664,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     required TextEditingController controller,
     bool enabled = true,
     bool required = false,
+    bool isLoading = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,28 +677,47 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          enabled: enabled,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-          ],
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
+        Stack(
+          children: [
+            TextFormField(
+              controller: controller,
+              enabled: enabled,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+              ],
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: Colors.grey.shade300,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                filled: true,
+                fillColor: enabled ? Colors.white : Colors.grey.shade100,
+                prefixText: label == 'Total Amount' || label == 'MRP' || label == 'Unit Price' ? '₹' : null,
               ),
+              validator: required
+                  ? (value) => value == null || value.isEmpty ? 'This field is required' : null
+                  : null,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            filled: true,
-            fillColor: enabled ? Colors.white : Colors.grey.shade100,
-            prefixText: label == 'Total Amount' || label == 'MRP' || label == 'Price' ? '₹' : null,
-          ),
-          validator: required
-              ? (value) => value == null || value.isEmpty ? 'This field is required' : null
-              : null,
+            if (isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withOpacity(0.7),
+                  child: const Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );
@@ -595,6 +749,80 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
           ),
         ],
       ),
+    );
+  }
+  
+  // Helper method to build UoM dropdown
+  Widget _buildUnitOfMeasureDropdown() {
+    // Show loading indicator if fetching UoM
+    if (_isLoadingUoM) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Unit of Measure*',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 8),
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+    
+    // If we have UoM data from the API, use it
+    if (_itemUnitsOfMeasure.isNotEmpty) {
+      final uomCodes = _itemUnitsOfMeasure.map((uom) => uom.code).toList();
+      return SearchableDropdown<String>(
+        label: 'Unit of Measure',
+        items: uomCodes,
+        selectedItem: _selectedUnitOfMeasure,
+        onChanged: (value) {
+          if (value != null && value != _selectedUnitOfMeasure) {
+            setState(() {
+              _selectedUnitOfMeasure = value;
+              
+              // Clear price/MRP info for the new UoM until we fetch it
+              _priceController.text = "Fetching...";
+              _mrpController.text = "Fetching...";
+              
+              // Fetch sales price when UoM changes
+              if (_selectedItem != null) {
+                _fetchSalesPrice();
+              }
+            });
+          }
+        },
+        required: true,
+        displayStringForItem: (String uom) => uom,
+      );
+    }
+    
+    // Otherwise use the fallback list
+    return SearchableDropdown<String>(
+      label: 'Unit of Measure',
+      items: _fallbackUnitsOfMeasure,
+      selectedItem: _selectedUnitOfMeasure,
+      onChanged: (value) {
+        if (value != null && value != _selectedUnitOfMeasure) {
+          setState(() {
+            _selectedUnitOfMeasure = value;
+            
+            // Clear price/MRP info for the new UoM until we fetch it
+            _priceController.text = "Fetching...";
+            _mrpController.text = "Fetching...";
+            
+            // Fetch sales price when UoM changes
+            if (_selectedItem != null) {
+              _fetchSalesPrice();
+            }
+          });
+        }
+      },
+      required: true,
+      displayStringForItem: (String uom) => uom,
     );
   }
 }

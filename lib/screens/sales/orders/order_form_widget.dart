@@ -98,6 +98,31 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
     super.dispose();
   }
 
+  void _handleCustomerChange(Customer? customer) {
+    if (customer != null) {
+      widget.onUpdate('customer', '${customer.no} - ${customer.name}');
+      widget.onUpdate('customerNo', customer.no);
+      widget.onUpdate('customerPriceGroup', customer.customerPriceGroup); // Add this line
+
+      // Generate sale code based on customer number
+      final saleCode = 'SC-${customer.no}';
+      _saleCodeController.text = saleCode;
+      widget.onUpdate('saleCode', saleCode);
+
+      // Fetch ship-to addresses for this customer
+      _fetchShipToAddresses(customer.no);
+    } else {
+      widget.onUpdate('customer', null);
+      widget.onUpdate('customerNo', null);
+      widget.onUpdate('customerPriceGroup', null); // Add this line
+      _saleCodeController.clear();
+      widget.onUpdate('saleCode', '');
+      setState(() {
+        _shipToLocations = [];
+      });
+    }
+  }
+
   Customer? _getCustomerByName(String customerName) {
     try {
       if (customerName.contains(' - ')) {
@@ -338,24 +363,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               ? _getCustomerByName(widget.orderData['customer'])
               : null,
           onChanged: (customer) {
-            if (customer != null) {
-              widget.onUpdate('customer', '${customer.no} - ${customer.name}');
-
-              // Generate sale code based on customer number
-              final saleCode = 'SC-${customer.no}';
-              _saleCodeController.text = saleCode;
-              widget.onUpdate('saleCode', saleCode);
-
-              // Fetch ship-to addresses for this customer
-              _fetchShipToAddresses(customer.no);
-            } else {
-              widget.onUpdate('customer', null);
-              _saleCodeController.clear();
-              widget.onUpdate('saleCode', '');
-              setState(() {
-                _shipToLocations = [];
-              });
-            }
+            _handleCustomerChange(customer);
           },
           required: true,
           displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
@@ -403,6 +411,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                   : null,
               onChanged: (shipTo) {
                 widget.onUpdate('shipTo', shipTo?.name);
+                widget.onUpdate('shipToCode', shipTo?.code ?? '');
               },
               required: true,
               displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',
@@ -483,24 +492,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                     ? _getCustomerByName(widget.orderData['customer'])
                     : null,
                 onChanged: (customer) {
-                  if (customer != null) {
-                    widget.onUpdate('customer', '${customer.no} - ${customer.name}');
-
-                    // Generate sale code based on customer number
-                    final saleCode = 'SC-${customer.no}';
-                    _saleCodeController.text = saleCode;
-                    widget.onUpdate('saleCode', saleCode);
-
-                    // Fetch ship-to addresses for this customer
-                    _fetchShipToAddresses(customer.no);
-                  } else {
-                    widget.onUpdate('customer', null);
-                    _saleCodeController.clear();
-                    widget.onUpdate('saleCode', '');
-                    setState(() {
-                      _shipToLocations = [];
-                    });
-                  }
+                  _handleCustomerChange(customer);
                 },
                 required: true,
                 displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
@@ -565,6 +557,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                         : null,
                     onChanged: (shipTo) {
                       widget.onUpdate('shipTo', shipTo?.name);
+                      widget.onUpdate('shipToCode', shipTo?.code ?? '');
                     },
                     required: true,
                     displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',

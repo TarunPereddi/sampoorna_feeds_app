@@ -7,6 +7,7 @@ class Customer {
   final String? stateCode;
   final String? gstNo;
   final String? panNo;
+  final String? customerPriceGroup; // Add this field
   final double balanceLcy;
 
   Customer({
@@ -18,6 +19,7 @@ class Customer {
     this.stateCode,
     this.gstNo,
     this.panNo,
+    this.customerPriceGroup, // Add to constructor
     this.balanceLcy = 0,
   });
 
@@ -31,6 +33,7 @@ class Customer {
       stateCode: json['State_Code'] as String?,
       gstNo: json['GST_Registration_No'] as String?,
       panNo: json['P_A_N_No'] as String?,
+      customerPriceGroup: json['Customer_Price_Group'] as String?, // Add to fromJson
       balanceLcy: json['Balance_LCY'] != null 
         ? (json['Balance_LCY'] is int 
           ? (json['Balance_LCY'] as int).toDouble() 
