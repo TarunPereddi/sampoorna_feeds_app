@@ -8,6 +8,9 @@ import '../../../models/location.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import 'searchable_dropdown.dart';
+import 'customer_selection_screen.dart';
+import 'ship_to_selection_screen.dart';
+import 'location_selection_screen.dart';
 
 class OrderFormWidget extends StatefulWidget {
   final Map<String, dynamic> orderData;
@@ -353,33 +356,71 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
         const SizedBox(height: 16),
 
-        // Customer Dropdown with Search
-        _isLoadingCustomers
-            ? const Center(child: CircularProgressIndicator())
-            : SearchableDropdown<Customer>(
-          label: 'Customer Name',
-          items: _customers,
-          selectedItem: widget.orderData['customer'] != null
-              ? _getCustomerByName(widget.orderData['customer'])
-              : null,
-          onChanged: (customer) {
-            _handleCustomerChange(customer);
-          },
-          required: true,
-          displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
-          searchController: _customerSearchController,
-          onSearchTextChanged: (String query) {
-            // Debounced search is handled by listener in initState
-          },
+        // Customer Selection
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Customer Name*',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () async {
+                // Navigate to customer selection screen
+                final selectedCustomer = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CustomerSelectionScreen(
+                      initialSelection: widget.orderData['customer'] != null
+                          ? _getCustomerByName(widget.orderData['customer'])
+                          : null,
+                    ),
+                  ),
+                );
+
+                if (selectedCustomer != null) {
+                  _handleCustomerChange(selectedCustomer);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.grey.shade300,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.orderData['customer'] != null
+                          ? widget.orderData['customer']
+                          : 'Select a customer',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: widget.orderData['customer'] != null 
+                          ? Colors.black 
+                          : Colors.grey.shade600,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
 
         // Sale Code
-        _buildTextField(
-          label: 'Customer Sale Code',
-          controller: _saleCodeController,
-          enabled: false,
-        ),
+        _buildSaleCodeDisplay(),
         const SizedBox(height: 16),
 
         // Delivery Date
@@ -397,65 +438,13 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         // Ship To
         _isLoadingShipTo
             ? const Center(child: CircularProgressIndicator())
-            : Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SearchableDropdown<ShipTo>(
-              label: 'Ship To Code',
-              items: _shipToLocations,
-              selectedItem: widget.orderData['shipTo'] != null && _shipToLocations.isNotEmpty
-                  ? _shipToLocations.firstWhere(
-                    (shipTo) => shipTo.name == widget.orderData['shipTo'],
-                orElse: () => _shipToLocations.first,
-              )
-                  : null,
-              onChanged: (shipTo) {
-                widget.onUpdate('shipTo', shipTo?.name);
-                widget.onUpdate('shipToCode', shipTo?.code ?? '');
-              },
-              required: true,
-              displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',
-            ),
-
-            // Add New Ship-To button
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () {
-                  _showAddShipToDialog();
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add New'),
-              ),
-            ),
-          ],
-        ),
+            : _buildShipToSelection(),
         const SizedBox(height: 16),
 
         // Location
         _isLoadingLocations
             ? const Center(child: CircularProgressIndicator())
-            : SearchableDropdown<Location>(
-          label: 'Location',
-          items: _locations,
-          selectedItem: widget.orderData['location'] != null && _locations.isNotEmpty
-              ? _locations.firstWhere(
-                (location) => location.name == widget.orderData['location'],
-            orElse: () => _locations.first,
-          )
-              : null,
-          onChanged: (location) {
-            if (location != null) {
-              widget.onUpdate('location', location.name);
-              widget.onUpdate('locationCode', location.code);
-            } else {
-              widget.onUpdate('location', null);
-              widget.onUpdate('locationCode', '');
-            }
-          },
-          required: true,
-          displayStringForItem: (Location location) => '${location.code} - ${location.name}',
-        ),
+            : _buildLocationSelection(),
       ],
     );
   }
@@ -481,25 +470,54 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               ),
             ),
             const SizedBox(width: 16),
-            // Customer Dropdown with Search
+            // Customer Selection
             Expanded(
-              child: _isLoadingCustomers
-                  ? const Center(child: CircularProgressIndicator())
-                  : SearchableDropdown<Customer>(
-                label: 'Customer Name',
-                items: _customers,
-                selectedItem: widget.orderData['customer'] != null
-                    ? _getCustomerByName(widget.orderData['customer'])
-                    : null,
-                onChanged: (customer) {
-                  _handleCustomerChange(customer);
+              child: GestureDetector(
+                onTap: () async {
+                  // Navigate to customer selection screen
+                  final selectedCustomer = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CustomerSelectionScreen(
+                        initialSelection: widget.orderData['customer'] != null
+                            ? _getCustomerByName(widget.orderData['customer'])
+                            : null,
+                      ),
+                    ),
+                  );
+
+                  if (selectedCustomer != null) {
+                    _handleCustomerChange(selectedCustomer);
+                  }
                 },
-                required: true,
-                displayStringForItem: (Customer customer) => '${customer.no} - ${customer.name}',
-                searchController: _customerSearchController,
-                onSearchTextChanged: (String query) {
-                  // Debounced search is handled by listener in initState
-                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.grey.shade300,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.orderData['customer'] != null
+                            ? widget.orderData['customer']
+                            : 'Select a customer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: widget.orderData['customer'] != null 
+                            ? Colors.black 
+                            : Colors.grey.shade600,
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 16),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -512,11 +530,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           children: [
             // Sale Code
             Expanded(
-              child: _buildTextField(
-                label: 'Customer Sale Code',
-                controller: _saleCodeController,
-                enabled: false,
-              ),
+              child: _buildSaleCodeDisplay(),
             ),
             const SizedBox(width: 16),
             // Delivery Date
@@ -543,66 +557,14 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             Expanded(
               child: _isLoadingShipTo
                   ? const Center(child: CircularProgressIndicator())
-                  : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SearchableDropdown<ShipTo>(
-                    label: 'Ship To Code',
-                    items: _shipToLocations,
-                    selectedItem: widget.orderData['shipTo'] != null && _shipToLocations.isNotEmpty
-                        ? _shipToLocations.firstWhere(
-                          (shipTo) => shipTo.name == widget.orderData['shipTo'],
-                      orElse: () => _shipToLocations.first,
-                    )
-                        : null,
-                    onChanged: (shipTo) {
-                      widget.onUpdate('shipTo', shipTo?.name);
-                      widget.onUpdate('shipToCode', shipTo?.code ?? '');
-                    },
-                    required: true,
-                    displayStringForItem: (ShipTo shipTo) => '${shipTo.code} - ${shipTo.name}',
-                  ),
-
-                  // Add New Ship-To button
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        _showAddShipToDialog();
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add New'),
-                    ),
-                  ),
-                ],
-              ),
+                  : _buildShipToSelection(),
             ),
             const SizedBox(width: 16),
             // Location
             Expanded(
               child: _isLoadingLocations
                   ? const Center(child: CircularProgressIndicator())
-                  : SearchableDropdown<Location>(
-                label: 'Location',
-                items: _locations,
-                selectedItem: widget.orderData['location'] != null && _locations.isNotEmpty
-                    ? _locations.firstWhere(
-                      (location) => location.name == widget.orderData['location'],
-                  orElse: () => _locations.first,
-                )
-                    : null,
-                onChanged: (location) {
-                  if (location != null) {
-                    widget.onUpdate('location', location.name);
-                    widget.onUpdate('locationCode', location.code);
-                  } else {
-                    widget.onUpdate('location', null);
-                    widget.onUpdate('locationCode', '');
-                  }
-                },
-                required: true,
-                displayStringForItem: (Location location) => '${location.code} - ${location.name}',
-              ),
+                  : _buildLocationSelection(),
             ),
           ],
         ),
@@ -727,6 +689,190 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               });
             }
           },
+        ),
+      ],
+    );
+  }
+
+  // Build a display-only field for sale code (replaces the disabled text field)
+  Widget _buildSaleCodeDisplay() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Customer Sale Code',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(widget.orderData['saleCode'] ?? ''),
+        ),
+      ],
+    );
+  }
+
+  // Build Ship To selection widget
+  Widget _buildShipToSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ship To Code*',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            // Check if customer is selected
+            if (widget.orderData['customerNo'] == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select a customer first')),
+              );
+              return;
+            }
+            
+            // Find currently selected ship-to
+            ShipTo? currentShipTo;
+            if (widget.orderData['shipTo'] != null && _shipToLocations.isNotEmpty) {
+              try {
+                currentShipTo = _shipToLocations.firstWhere(
+                  (shipTo) => shipTo.name == widget.orderData['shipTo'],
+                );
+              } catch (e) {
+                // Ship-to not found in list, ignore
+              }
+            }
+            
+            final selectedShipTo = await Navigator.push<ShipTo>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ShipToSelectionScreen(
+                  customerNo: widget.orderData['customerNo'],
+                  initialSelection: currentShipTo,
+                ),
+              ),
+            );
+            
+            if (selectedShipTo != null) {
+              widget.onUpdate('shipTo', selectedShipTo.name);
+              widget.onUpdate('shipToCode', selectedShipTo.code);
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: widget.orderData['shipTo'] != null
+                      ? Text(widget.orderData['shipTo'].toString())
+                      : Text(
+                          'Select ship-to address...',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
+            ),
+          ),
+        ),
+        // Add New Ship-To button
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () {
+              _showAddShipToDialog();
+            },
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add New'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Build Location selection widget
+  Widget _buildLocationSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Location*',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            // Find currently selected location
+            Location? currentLocation;
+            if (widget.orderData['location'] != null && _locations.isNotEmpty) {
+              try {
+                currentLocation = _locations.firstWhere(
+                  (location) => location.name == widget.orderData['location'],
+                );
+              } catch (e) {
+                // Location not found in list, ignore
+              }
+            }
+            
+            final selectedLocation = await Navigator.push<Location>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LocationSelectionScreen(
+                  locations: _locations,
+                  initialSelection: currentLocation,
+                ),
+              ),
+            );
+            
+            if (selectedLocation != null) {
+              widget.onUpdate('location', selectedLocation.name);
+              widget.onUpdate('locationCode', selectedLocation.code);
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: widget.orderData['location'] != null
+                      ? Text(widget.orderData['location'].toString())
+                      : Text(
+                          'Select location...',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
+            ),
+          ),
         ),
       ],
     );

@@ -6,6 +6,8 @@ import '../../../models/item_unit_of_measure.dart'; // Import the new model
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import 'searchable_dropdown.dart';
+import 'item_selection_screen.dart';
+import 'uom_selection_screen.dart';
 
 class OrderItemFormWidget extends StatefulWidget {
   final bool isSmallScreen;
@@ -521,22 +523,11 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         // Item Selection
         _isLoadingItems
             ? const Center(child: CircularProgressIndicator())
-            : SearchableDropdown<Item>(
-                label: 'Item',
-                items: _items,
-                selectedItem: _selectedItem,
-                onChanged: _handleItemSelected,
-                required: true,
-                displayStringForItem: (Item item) => '${item.no} - ${item.description}',
-                searchController: _itemSearchController,
-                onSearchTextChanged: (String query) {
-                  // Search handled by listener in initState
-                },
-              ),
+            : _buildItemSelection(),
         const SizedBox(height: 16),
 
         // Unit of Measure
-        _buildUnitOfMeasureDropdown(),
+        _buildUomSelection(),
         const SizedBox(height: 16),
 
         // Quantity
@@ -548,28 +539,25 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         const SizedBox(height: 16),
 
         // MRP - now non-editable with loading state
-        _buildNumberField(
+        _buildReadOnlyField(
           label: 'MRP',
-          controller: _mrpController,
-          enabled: false,
+          value: _mrpController.text,
           isLoading: _isLoadingPrice,
         ),
         const SizedBox(height: 16),
 
         // Unit Price - now non-editable with loading state
-        _buildNumberField(
+        _buildReadOnlyField(
           label: 'Unit Price',
-          controller: _priceController,
-          enabled: false,
+          value: _priceController.text,
           isLoading: _isLoadingPrice,
         ),
         const SizedBox(height: 16),
 
         // Total Amount
-        _buildNumberField(
+        _buildReadOnlyField(
           label: 'Total Amount',
-          controller: _totalAmountController,
-          enabled: false,
+          value: _totalAmountController.text,
         ),
       ],
     );
@@ -588,24 +576,13 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
               flex: 2,
               child: _isLoadingItems
                   ? const Center(child: CircularProgressIndicator())
-                  : SearchableDropdown<Item>(
-                      label: 'Item',
-                      items: _items,
-                      selectedItem: _selectedItem,
-                      onChanged: _handleItemSelected,
-                      required: true,
-                      displayStringForItem: (Item item) => '${item.no} - ${item.description}',
-                      searchController: _itemSearchController,
-                      onSearchTextChanged: (String query) {
-                        // Search handled by listener in initState
-                      },
-                    ),
+                  : _buildItemSelection(),
             ),
             const SizedBox(width: 16),
             // Unit of Measure
             Expanded(
               flex: 1,
-              child: _buildUnitOfMeasureDropdown(),
+              child: _buildUomSelection(),
             ),
           ],
         ),
@@ -626,30 +603,27 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
             const SizedBox(width: 16),
             // MRP - now non-editable with loading state
             Expanded(
-              child: _buildNumberField(
+              child: _buildReadOnlyField(
                 label: 'MRP',
-                controller: _mrpController,
-                enabled: false,
+                value: _mrpController.text,
                 isLoading: _isLoadingPrice,
               ),
             ),
             const SizedBox(width: 16),
             // Unit Price - now non-editable with loading state
             Expanded(
-              child: _buildNumberField(
+              child: _buildReadOnlyField(
                 label: 'Unit Price',
-                controller: _priceController,
-                enabled: false,
+                value: _priceController.text,
                 isLoading: _isLoadingPrice,
               ),
             ),
             const SizedBox(width: 16),
             // Total Amount
             Expanded(
-              child: _buildNumberField(
+              child: _buildReadOnlyField(
                 label: 'Total Amount',
-                controller: _totalAmountController,
-                enabled: false,
+                value: _totalAmountController.text,
               ),
             ),
           ],
@@ -723,6 +697,60 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     );
   }
 
+  // Build a read-only field for displaying prices and amounts
+  Widget _buildReadOnlyField({
+    required String label,
+    required String value,
+    bool isLoading = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                label.contains('Price') || label.contains('MRP') || label.contains('Amount') 
+                    ? '₹$value' 
+                    : value,
+              ),
+            ),
+            if (isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withOpacity(0.7),
+                  child: const Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   // Show item information dialog
   void _showItemInfoDialog() {
     showDialog(
@@ -752,77 +780,146 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     );
   }
   
-  // Helper method to build UoM dropdown
-  Widget _buildUnitOfMeasureDropdown() {
-    // Show loading indicator if fetching UoM
-    if (_isLoadingUoM) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Unit of Measure*',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+  // Build UoM selection widget
+  Widget _buildUomSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Unit of Measure*',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            if (_selectedItem == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select an item first')),
+              );
+              return;
+            }
+            
+            final selectedUom = await Navigator.push<String>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UomSelectionScreen(
+                  uoms: _itemUnitsOfMeasure,
+                  fallbackUoms: _fallbackUnitsOfMeasure,
+                  selectedUom: _selectedUnitOfMeasure,
+                ),
+              ),
+            );
+            
+            if (selectedUom != null && selectedUom != _selectedUnitOfMeasure) {
+              setState(() {
+                _selectedUnitOfMeasure = selectedUom;
+                
+                // Clear price/MRP info for the new UoM until we fetch it
+                _mrpController.text = "Fetching...";
+                _priceController.text = "Fetching...";
+                _mrp = 0;
+                _price = 0;
+                
+                // Fetch sales price when UoM changes
+                if (_selectedItem != null) {
+                  _fetchSalesPrice();
+                }
+              });
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _selectedUnitOfMeasure != null
+                      ? Text(_selectedUnitOfMeasure!)
+                      : Text(
+                          'Select unit...',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
             ),
           ),
-          SizedBox(height: 8),
-          Center(child: CircularProgressIndicator()),
-        ],
-      );
-    }
-    
-    // If we have UoM data from the API, use it
-    if (_itemUnitsOfMeasure.isNotEmpty) {
-      final uomCodes = _itemUnitsOfMeasure.map((uom) => uom.code).toList();
-      return SearchableDropdown<String>(
-        label: 'Unit of Measure',
-        items: uomCodes,
-        selectedItem: _selectedUnitOfMeasure,
-        onChanged: (value) {
-          if (value != null && value != _selectedUnitOfMeasure) {
-            setState(() {
-              _selectedUnitOfMeasure = value;
-              
-              // Clear price/MRP info for the new UoM until we fetch it
-              _priceController.text = "Fetching...";
-              _mrpController.text = "Fetching...";
-              
-              // Fetch sales price when UoM changes
-              if (_selectedItem != null) {
-                _fetchSalesPrice();
-              }
-            });
-          }
-        },
-        required: true,
-        displayStringForItem: (String uom) => uom,
-      );
-    }
-    
-    // Otherwise use the fallback list
-    return SearchableDropdown<String>(
-      label: 'Unit of Measure',
-      items: _fallbackUnitsOfMeasure,
-      selectedItem: _selectedUnitOfMeasure,
-      onChanged: (value) {
-        if (value != null && value != _selectedUnitOfMeasure) {
-          setState(() {
-            _selectedUnitOfMeasure = value;
-            
-            // Clear price/MRP info for the new UoM until we fetch it
-            _priceController.text = "Fetching...";
-            _mrpController.text = "Fetching...";
-            
-            // Fetch sales price when UoM changes
-            if (_selectedItem != null) {
-              _fetchSalesPrice();
+        ),
+      ],
+    );
+  }
+
+  // Build Item selection widget
+  Widget _buildItemSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Item*',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            if (widget.locationCode == null || widget.locationCode!.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select a location first')),
+              );
+              return;
             }
-          });
-        }
-      },
-      required: true,
-      displayStringForItem: (String uom) => uom,
+            
+            final selectedItem = await Navigator.push<Item>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ItemSelectionScreen(
+                  locationCode: widget.locationCode!,
+                  initialSelection: _selectedItem,
+                  initialSearchText: _itemSearchController.text,
+                ),
+              ),
+            );
+            
+            if (selectedItem != null) {
+              _handleItemSelected(selectedItem);
+              // Update the search controller for future reference
+              _itemSearchController.text = selectedItem.description;
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _selectedItem != null
+                      ? Text('${_selectedItem!.no} - ${_selectedItem!.description}')
+                      : Text(
+                          'Select item...',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

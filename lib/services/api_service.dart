@@ -2,6 +2,18 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../models/customer.dart';
+
+// Define a class to hold pagination results
+class PaginationResult<T> {
+  final List<T> items;
+  final int totalCount;
+  
+  PaginationResult({
+    required this.items,
+    required this.totalCount,
+  });
+}
 
 class ApiService {
   static const String baseUrl = 'http://api.sampoornafeeds.in:4052/BCtest/ODataV4';
@@ -249,9 +261,21 @@ class ApiService {
     return response['value'];
   }
 
-  // Get items based on location
-  Future<List<dynamic>> getItems({required String locationCode}) async {
-    final queryParams = {'\$filter': "Item_Location eq '$locationCode'"};
+  // Get items based on location with optional search
+  Future<List<dynamic>> getItems({
+    required String locationCode,
+    String? searchQuery,
+  }) async {
+    List<String> filters = ["Item_Location eq '$locationCode'"];
+    
+    // Add search filter if provided
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      // Use wildcard search based on API requirements
+      final wildcardSearch = "*$searchQuery*";
+      filters.add("(Description eq '$wildcardSearch')");
+    }
+    
+    final queryParams = {'\$filter': filters.join(' and ')};
     final response = await get('ItemList', queryParams: queryParams);
     return response['value'];
   }
@@ -394,5 +418,56 @@ class ApiService {
       debugPrint('Error adding sales order line: $e');
       throw Exception('Failed to add sales order line: $e');
     }
+  }
+
+  // Get customers with pagination and count support
+  Future<PaginationResult<Customer>> getCustomersWithPagination({
+    required String salesPersonCode,
+    String? searchQuery,
+    required int page,
+    required int pageSize,
+  }) async {
+    Map<String, String> queryParams = {
+      '\$count': 'true',
+      '\$top': pageSize.toString(),
+      '\$skip': ((page - 1) * pageSize).toString(),
+    };
+
+    // Build filter string
+    List<String> filters = [];
+    
+    // Add sales person filter
+    filters.add("Salesperson_Code eq '$salesPersonCode'");
+    
+    // Add search filter if provided
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      // Use wildcards with eq operator instead of contains
+      final wildcardSearch = "*$searchQuery*";
+      
+      // Add filters separately for better readability
+      filters.add("Name eq '$wildcardSearch'");
+      // filters.add("No eq '$wildcardSearch'");
+    }
+    
+    // Combine filters with 'and'
+    queryParams['\$filter'] = filters.join(' and ');
+    
+    // Log the query to debug
+    debugPrint('Customer search query: ${Uri.parse('$baseUrl/CustomerList').replace(queryParameters: queryParams)}');
+    
+    final response = await get('CustomerList', queryParams: queryParams);
+    
+    // Extract total count from response
+    final totalCount = response['@odata.count'] as int? ?? 0;
+    
+    // Map response items to Customer objects
+    final items = (response['value'] as List)
+        .map((item) => Customer.fromJson(item))
+        .toList();
+    
+    return PaginationResult<Customer>(
+      items: items,
+      totalCount: totalCount,
+    );
   }
 }
