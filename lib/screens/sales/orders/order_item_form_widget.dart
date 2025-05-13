@@ -54,8 +54,12 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   // Loading states
   bool _isLoadingItems = false;
   bool _isLoadingUoM = false;
-  bool _isLoadingPrice = false; // New loading state for price fetching
+  bool _isLoadingPrice = false;
   
+  // Control flags to prevent stack overflow
+  bool _isUomDialogOpen = false;
+  bool _skipPriceUpdate = false;
+
   // Fallback units of measure for when API doesn't return any units
   final List<String> _fallbackUnitsOfMeasure = [
     'Bag',
@@ -181,33 +185,46 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     
     try {
       final uomData = await _apiService.getItemUnitsOfMeasure(itemNo);
-      setState(() {
-        _itemUnitsOfMeasure = uomData.map((json) => ItemUnitOfMeasure.fromJson(json)).toList();
-        _isLoadingUoM = false;
-        
-        // If no UoM data returned from API, use the fallback list
-        if (_itemUnitsOfMeasure.isEmpty) {
-          return;
-        }
-        
-        // If no UoM selected yet but we have units, set the default one
-        if (_selectedUnitOfMeasure == null && _itemUnitsOfMeasure.isNotEmpty) {
-          // Prefer to use the Sales Unit of Measure if it exists in the list
-          if (_selectedItem != null && _selectedItem!.salesUnitOfMeasure != null) {
-            final defaultUoMIndex = _itemUnitsOfMeasure.indexWhere(
-              (uom) => uom.code == _selectedItem!.salesUnitOfMeasure,
-            );
-            
-            if (defaultUoMIndex >= 0) {
-              _selectedUnitOfMeasure = _itemUnitsOfMeasure[defaultUoMIndex].code;
-            } else {
-              _selectedUnitOfMeasure = _itemUnitsOfMeasure.first.code;
-            }
+      
+      List<ItemUnitOfMeasure> loadedUnits = uomData.map((json) => ItemUnitOfMeasure.fromJson(json)).toList();
+      String? newUnitOfMeasure;
+      
+      // Determine the default UoM without immediately setting state
+      if (loadedUnits.isNotEmpty) {
+        // Prefer to use the Sales Unit of Measure if it exists in the list
+        if (_selectedItem != null && _selectedItem!.salesUnitOfMeasure != null) {
+          final defaultUoMIndex = loadedUnits.indexWhere(
+            (uom) => uom.code == _selectedItem!.salesUnitOfMeasure,
+          );
+          
+          if (defaultUoMIndex >= 0) {
+            newUnitOfMeasure = loadedUnits[defaultUoMIndex].code;
           } else {
-            _selectedUnitOfMeasure = _itemUnitsOfMeasure.first.code;
+            newUnitOfMeasure = loadedUnits.first.code;
           }
+        } else {
+          newUnitOfMeasure = loadedUnits.first.code;
+        }
+      }
+      
+      // Set state once with all changes
+      setState(() {
+        _itemUnitsOfMeasure = loadedUnits;
+        _isLoadingUoM = false;
+        if (newUnitOfMeasure != null && _selectedUnitOfMeasure == null) {
+          _selectedUnitOfMeasure = newUnitOfMeasure;
         }
       });
+      
+      // Only fetch price AFTER setState is complete, and if we have all required info
+      if (_selectedUnitOfMeasure != null && 
+          widget.locationCode != null && 
+          widget.locationCode!.isNotEmpty &&
+          widget.customerPriceGroup != null && 
+          widget.customerPriceGroup!.isNotEmpty) {
+        await _fetchSalesPrice();
+      }
+      
     } catch (e) {
       setState(() {
         _isLoadingUoM = false;
@@ -222,42 +239,44 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   
   // Method to handle item selection
   void _handleItemSelected(Item? item) {
+    if (item == null) return;
+    
+    // Store the previous item to check if we're selecting a new item
+    Item? previousItem = _selectedItem;
+    String? previousUoM = _selectedUnitOfMeasure;
+    
     setState(() {
       _selectedItem = item;
-      if (item != null) {
-        // Set MRP value from the item
-        _mrp = item.unitPrice;
-        _mrpController.text = _mrp.toString();
+      
+      // Set MRP value from the item
+      _mrp = item.unitPrice;
+      _mrpController.text = _mrp.toString();
 
-        // Set default price as MRP initially
-        _price = _mrp;
-        _priceController.text = _price.toString();
+      // Set default price as MRP initially
+      _price = _mrp;
+      _priceController.text = _price.toString();
 
-        // Set default Unit of Measure from the item's sales unit of measure if available
-        if (item.salesUnitOfMeasure != null) {
-          _selectedUnitOfMeasure = item.salesUnitOfMeasure;
-        } else if (item.description.contains('KG BAG')) {
-          _selectedUnitOfMeasure = '50 KG BAG';
-        } else {
-          _selectedUnitOfMeasure = 'Kg';
-        }
-        
-        // Calculate total if quantity is set
-        _calculateItemTotal();
-        
-        // Fetch available Units of Measure
-        _fetchUnitsOfMeasure(item.no);
-
-        // Fetch sales price if we have all the required information
-        if (_selectedUnitOfMeasure != null && 
-            widget.locationCode != null && 
-            widget.locationCode!.isNotEmpty &&
-            widget.customerPriceGroup != null && 
-            widget.customerPriceGroup!.isNotEmpty) {
-          _fetchSalesPrice();
-        }
+      // Set default Unit of Measure from the item's sales unit of measure if available
+      if (item.salesUnitOfMeasure != null) {
+        _selectedUnitOfMeasure = item.salesUnitOfMeasure;
+      } else if (item.description.contains('KG BAG')) {
+        _selectedUnitOfMeasure = '50 KG BAG';
+      } else {
+        _selectedUnitOfMeasure = 'Kg';
       }
     });
+    
+    // Calculate total if quantity is set
+    _calculateItemTotal();
+    
+    // Fetch UoM only if the item changed to avoid recursion
+    if (previousItem == null || previousItem.no != item.no) {
+      _fetchUnitsOfMeasure(item.no);
+    } 
+    // If only the UoM changed but we have the same item, fetch price directly
+    else if (_selectedUnitOfMeasure != previousUoM) {
+      _fetchSalesPrice();
+    }
   }
 
   @override
@@ -272,16 +291,35 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
 
   // Calculate total for the current item
   void _calculateItemTotal() {
-    if (_quantityController.text.isNotEmpty && _priceController.text.isNotEmpty) {
-      final double quantity = double.tryParse(_quantityController.text) ?? 0;
-      final double price = double.tryParse(_priceController.text) ?? 0;
-      setState(() {
-        _quantity = quantity;
-        _price = price;
-        _totalAmount = _quantity * _price;
-        _totalAmountController.text = _totalAmount.toStringAsFixed(2);
-      });
+    double quantity = 0;
+    double price = 0;
+    
+    // Safely parse quantity
+    try {
+      if (_quantityController.text.isNotEmpty) {
+        quantity = double.tryParse(_quantityController.text) ?? 0;
+      }
+    } catch (e) {
+      quantity = 0;
     }
+    
+    // Safely parse price
+    try {
+      if (_priceController.text.isNotEmpty && _priceController.text != "Fetching...") {
+        price = double.tryParse(_priceController.text) ?? 0;
+      }
+    } catch (e) {
+      price = 0;
+    }
+    
+    setState(() {
+      _quantity = quantity;
+      _price = price;
+      _totalAmount = _quantity * _price;
+      _totalAmountController.text = _totalAmount.toStringAsFixed(2);
+    });
+    
+    debugPrint('Calculated total: $_totalAmount from quantity: $_quantity and price: $_price');
   }
 
   // Reset the item form
@@ -345,7 +383,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     });
     
     try {
-      print('Fetching price for: Item=${_selectedItem!.no}, UoM=$_selectedUnitOfMeasure, Location=${widget.locationCode}, PriceGroup=${widget.customerPriceGroup}');
+      debugPrint('Fetching price for: Item=${_selectedItem!.no}, UoM=$_selectedUnitOfMeasure, Location=${widget.locationCode}, PriceGroup=${widget.customerPriceGroup}');
       
       final priceData = await _apiService.getSalesPrice(
         itemNo: _selectedItem!.no,
@@ -357,55 +395,75 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       if (!mounted) return; // Check again after async operation
       
       if (priceData != null && priceData.containsKey('Unit_Price')) {
+        // Get the price from the API response
+        double newPrice = 0;
+        if (priceData['Unit_Price'] != null) {
+          newPrice = priceData['Unit_Price'] is int
+              ? (priceData['Unit_Price'] as int).toDouble()
+              : priceData['Unit_Price'] as double;
+        }
+        
+        // Get the MRP from the API response
+        double newMrp = 0;
+        if (priceData['MRP'] != null) {
+          newMrp = priceData['MRP'] is int
+              ? (priceData['MRP'] as int).toDouble()
+              : priceData['MRP'] as double;
+        }
+        
         setState(() {
-          // Get the price from the API response
-          if (priceData['Unit_Price'] != null) {
-            _price = priceData['Unit_Price'] is int
-                ? (priceData['Unit_Price'] as int).toDouble()
-                : priceData['Unit_Price'] as double;
-            _priceController.text = _price.toString();
-          }
+          _price = newPrice;
+          _priceController.text = _price.toString();
           
-          // Get the MRP from the API response
-          if (priceData['MRP'] != null) {
-            _mrp = priceData['MRP'] is int
-                ? (priceData['MRP'] as int).toDouble()
-                : priceData['MRP'] as double;
-            _mrpController.text = _mrp.toString();
-          }
+          _mrp = newMrp;
+          _mrpController.text = _mrp.toString();
           
-          // Recalculate total amount
-          _calculateItemTotal();
           _isLoadingPrice = false;
         });
+        
+        // Always recalculate after price changes, outside of setState
+        _calculateItemTotal();
+        
       } else {
         if (!mounted) return; // Check again
         
         setState(() {
           _isLoadingPrice = false;
+          // Set default values if API didn't return anything
+          _price = _mrp;
+          _priceController.text = _price.toString();
         });
         
-        // Show error message if price data is not found
+        // Recalculate with default prices
+        _calculateItemTotal();
+        
+        // Show message about using default price
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot get price. Please try again later.'),
-            backgroundColor: Colors.red,
+            content: Text('Using default price. Specific pricing not available.'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
     } catch (e) {
       if (!mounted) return; // Check again
       
-      print('Error fetching sales price: $e');
+      debugPrint('Error fetching sales price: $e');
       
       setState(() {
         _isLoadingPrice = false;
+        // Set default values if API had an error
+        _price = _mrp;
+        _priceController.text = _price.toString();
       });
+      
+      // Recalculate with default prices
+      _calculateItemTotal();
       
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Cannot get price: $e'),
+          content: Text('Price fetch error. Using default: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -423,6 +481,86 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     }
     _priceController.text = _price.toString();
     _calculateItemTotal();
+  }
+
+  // Add this helper method to show UoM selection directly in a dialog
+  Future<String?> _showUomSelectionDialog(List<String> uoms, String? currentUom) async {
+    String? selectedValue = currentUom;
+    String filterText = '';
+    List<String> filteredUoms = List.from(uoms);
+    
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void filterUoms(String query) {
+              setState(() {
+                if (query.isEmpty) {
+                  filteredUoms = List.from(uoms);
+                } else {
+                  filteredUoms = uoms.where(
+                    (uom) => uom.toLowerCase().contains(query.toLowerCase())
+                  ).toList();
+                }
+              });
+            }
+            
+            return AlertDialog(
+              title: const Text('Select Unit of Measure'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Search field
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search units...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      ),
+                      onChanged: filterUoms,
+                    ),
+                    const SizedBox(height: 8),
+                    
+                    // UoM list
+                    Expanded(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filteredUoms.length,
+                        itemBuilder: (context, index) {
+                          final uom = filteredUoms[index];
+                          final isSelected = uom == selectedValue;
+                          
+                          return ListTile(
+                            title: Text(uom),
+                            tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
+                            onTap: () {
+                              Navigator.of(context).pop(uom);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  child: const Text('Cancel'),
+                ),
+              ],
+              contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -795,6 +933,11 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () async {
+            // Prevent stack overflow by blocking multiple operations
+            if (_isUomDialogOpen || _isLoadingPrice) {
+              return;
+            }
+            
             if (_selectedItem == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please select an item first')),
@@ -802,32 +945,38 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
               return;
             }
             
-            final selectedUom = await Navigator.push<String>(
-              context,
-              MaterialPageRoute(
-                builder: (context) => UomSelectionScreen(
-                  uoms: _itemUnitsOfMeasure,
-                  fallbackUoms: _fallbackUnitsOfMeasure,
-                  selectedUom: _selectedUnitOfMeasure,
-                ),
-              ),
-            );
+            // Set flag to indicate dialog is open
+            _isUomDialogOpen = true;
+            
+            // Prepare the list of UoMs to show
+            final List<String> uomList;
+            if (_itemUnitsOfMeasure.isNotEmpty) {
+              // Use API data if available
+              uomList = _itemUnitsOfMeasure.map((uom) => uom.code).toList();
+            } else {
+              // Fall back to default list if API didn't return any
+              uomList = _fallbackUnitsOfMeasure;
+            }
+            
+            // Show dialog instead of navigating to a screen
+            final selectedUom = await _showUomSelectionDialog(uomList, _selectedUnitOfMeasure);
+            
+            // Reset dialog flag
+            _isUomDialogOpen = false;
             
             if (selectedUom != null && selectedUom != _selectedUnitOfMeasure) {
               setState(() {
                 _selectedUnitOfMeasure = selectedUom;
                 
-                // Clear price/MRP info for the new UoM until we fetch it
+                // Mark fields as loading
                 _mrpController.text = "Fetching...";
                 _priceController.text = "Fetching...";
-                _mrp = 0;
-                _price = 0;
-                
-                // Fetch sales price when UoM changes
-                if (_selectedItem != null) {
-                  _fetchSalesPrice();
-                }
               });
+              
+              // Important: Call async method outside setState
+              if (_selectedItem != null) {
+                await _fetchSalesPrice();
+              }
             }
           },
           child: Container(

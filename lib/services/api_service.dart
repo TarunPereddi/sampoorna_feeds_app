@@ -194,8 +194,9 @@ class ApiService {
     required String locationCode,
     required String unitOfMeasure,
   }) async {
-    if (itemNo.isEmpty || customerPriceGroup.isEmpty || locationCode.isEmpty || unitOfMeasure.isEmpty) {
-      print('Missing required parameters for getSalesPrice');
+    if (itemNo.isEmpty || customerPriceGroup.isEmpty || 
+        locationCode.isEmpty || unitOfMeasure.isEmpty) {
+      debugPrint('Missing required parameters for getSalesPrice');
       return null;
     }
 
@@ -210,39 +211,37 @@ class ApiService {
         "orderDate": DateFormat('yyyy-MM-dd').format(DateTime.now()), // Today's date
       };
       
-      print('Sales Price API Request Body: $body');
+      debugPrint('Sales Price API Request: ${body.toString()}');
       
       // Make the POST request
       final response = await post('Barcode_Web_Services_SalesPriceAPI', body: body);
       
-      // Log the full response for debugging
-      print('Sales Price API Raw Response: $response');
+      // Check if we have valid data
+      if (response['value'] == null) {
+        debugPrint('No value returned from sales price API');
+        return null;
+      }
       
-      // Check if we have valid data and parse the JSON
-      if (response['value'] != null) {
-        String jsonString = response['value'] as String;
+      String jsonString = response['value'] as String;
+      
+      // Try to parse the JSON using a more robust approach
+      try {
+        Map<String, dynamic> parsedData = jsonDecode(jsonString);
         
-        try {
-          // Parse the JSON string into a Map
-          Map<String, dynamic> parsedData = jsonDecode(jsonString);
-          
-          if (parsedData.containsKey('Response')) {
-            print('Parsed Sales Price Data: ${parsedData['Response']}');
-            return parsedData['Response'];
-          } else {
-            print('Response key not found in parsed data: $parsedData');
-          }
-        } catch (parseError) {
-          print('Error parsing Sales Price JSON: $parseError');
-          print('Raw JSON string: $jsonString');
+        if (parsedData.containsKey('Response')) {
+          debugPrint('Parsed sales price data successfully: ${parsedData['Response']}');
+          return parsedData['Response'];
+        } else {
+          debugPrint('No Response key in data: $parsedData');
         }
-      } else {
-        print('No value found in response: $response');
+      } catch (e) {
+        debugPrint('JSON parse error: $e');
+        debugPrint('Raw JSON: $jsonString');
       }
       
       return null;
     } catch (e) {
-      print('Error fetching sales price: $e');
+      debugPrint('Exception in getSalesPrice: $e');
       return null;
     }
   }
