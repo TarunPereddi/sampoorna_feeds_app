@@ -277,10 +277,10 @@ class ApiService {
     final queryParams = {'\$filter': filters.join(' and ')};
     final response = await get('ItemList', queryParams: queryParams);
     return response['value'];
-  }
-  // Get sales orders with filtering and pagination
+  }  // Get sales orders with filtering and pagination
   Future<dynamic> getSalesOrders({
     String? searchQuery,
+    String? searchFilter, // New parameter for direct filter string
     String? status,
     DateTime? fromDate,
     DateTime? toDate,
@@ -307,13 +307,15 @@ class ApiService {
       filters.add("Saels_Person_Name eq '$salesPersonName'");
     }
 
-    // Add search filter
-    if (searchQuery != null && searchQuery.isNotEmpty) {
-      if (searchQuery.startsWith('SO/') || searchQuery.contains('/')) {
+    // Use direct search filter if provided, otherwise use searchQuery
+    if (searchFilter != null && searchFilter.isNotEmpty) {
+      filters.add(searchFilter);
+    } else if (searchQuery != null && searchQuery.isNotEmpty) {
+      if (searchQuery.toUpperCase().startsWith('SO/') || searchQuery.contains('/')) {
         // If it looks like an order number
         filters.add("No eq '$searchQuery'");
       } else {
-        // Otherwise, assume customer name search
+        // Otherwise, assume customer name search with improved contains
         filters.add("contains(Sell_to_Customer_Name,'$searchQuery')");
       }
     }

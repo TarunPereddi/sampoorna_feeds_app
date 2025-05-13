@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'order_detail_view.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -35,8 +36,7 @@ class OrderTableView extends StatelessWidget {
                   DataCell(Text(order['customerName'] as String)),
                   DataCell(Text(order['date'] as String)),
                   DataCell(Text(order['amount'] as String)),
-                  DataCell(_buildStatusChip(order['status'] as String)),
-                  DataCell(
+                  DataCell(_buildStatusChip(order['status'] as String)),                  DataCell(
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -57,15 +57,6 @@ class OrderTableView extends StatelessWidget {
                           },
                           tooltip: 'Edit Order',
                           color: Colors.orange,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.print, size: 20),
-                          onPressed: () {
-                            // Print order
-                            _showPrintDialog(context, order);
-                          },
-                          tooltip: 'Print Order',
-                          color: Colors.purple,
                         ),
                       ],
                     ),
@@ -117,7 +108,6 @@ class OrderTableView extends StatelessWidget {
       ),
     );
   }
-
   // Show view order dialog
   void _showViewOrderDialog(BuildContext context, Map<String, dynamic> order) {
     showDialog(
@@ -127,156 +117,20 @@ class OrderTableView extends StatelessWidget {
         child: Container(
           width: MediaQuery.of(context).size.width * 0.8,
           padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Order Details: ${order['id']}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Status
-              Row(
-                children: [
-                  const Text(
-                    'Status: ',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  _buildStatusChip(order['status'] as String),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Order Info Table
-              Table(
-                columnWidths: const {
-                  0: FlexColumnWidth(1),
-                  1: FlexColumnWidth(2),
-                },
-                border: TableBorder.all(
-                  color: Colors.grey.shade300,
-                  width: 1,
-                ),
-                children: [
-                  _buildTableRow('Customer', order['customerName']),
-                  _buildTableRow('Date', order['date']),
-                  _buildTableRow('Amount', order['amount']),
-                  _buildTableRow('Delivery', 'Scheduled for delivery'),
-                  _buildTableRow('Payment', 'Completed'),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Mock Order Items
-              const Text(
-                'Order Items',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: DataTable(
-                    columnSpacing: 20,
-                    columns: const [
-                      DataColumn(label: Text('Item')),
-                      DataColumn(label: Text('Qty')),
-                      DataColumn(label: Text('Price')),
-                      DataColumn(label: Text('Total')),
-                    ],
-                    rows: [
-                      DataRow(cells: [
-                        const DataCell(Text('Protein Supplement')),
-                        const DataCell(Text('2')),
-                        const DataCell(Text('₹4,000')),
-                        const DataCell(Text('₹8,000')),
-                      ]),
-                      DataRow(cells: [
-                        const DataCell(Text('Chicken Feed Type A')),
-                        const DataCell(Text('5')),
-                        const DataCell(Text('₹3,100')),
-                        const DataCell(Text('₹15,500')),
-                      ]),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Action Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showPrintDialog(context, order);
-                    },
-                    icon: const Icon(Icons.print, size: 16),
-                    label: const Text('Print'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          child: SingleChildScrollView(
+            child: OrderDetailView(
+              order: order,
+              onEdit: () {
+                Navigator.pop(context);
+                _showEditOrderDialog(context, order);
+              },
+            ),
           ),
         ),
       ),
     );
   }
-
-  // Helper to build table rows for order details
-  TableRow _buildTableRow(String label, String value) {
-    return TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(value),
-        ),
-      ],
-    );
-  }
+  // This method is no longer needed since we're using OrderDetailView
 
   // Show edit order dialog
   void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
@@ -297,24 +151,5 @@ class OrderTableView extends StatelessWidget {
       ),
     );
   }
-
-  // Show print dialog
-  void _showPrintDialog(BuildContext context, Map<String, dynamic> order) {
-    // This would be implemented to print the order
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Print Order'),
-        content: const Text(
-            'Printing functionality will be implemented with API integration.'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
+  // Print dialog removed as per requirements
 }

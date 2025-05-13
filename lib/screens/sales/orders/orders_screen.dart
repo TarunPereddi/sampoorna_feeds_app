@@ -91,7 +91,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     // Map the tab names to actual API status values
     switch (tabStatus) {
       case 'Open': return 'Open';
-      case 'Pending': return 'Pending Approval'; // Changed to match exact API value
+      case 'Pending Approval': return 'Pending Approval'; // Changed to match exact API value
       case 'Approved': return 'Released'; // Changed to match exact API value
       default: return null;
     }
@@ -381,7 +381,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       ),
     );
   }
-
   // Build the search bar
   Widget _buildSearchBar() {
     return Padding(
@@ -404,7 +403,13 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     _applyFilters();
                   },
                 )
-                    : null,
+                    : IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: () {
+                          // Trigger search on icon press
+                          _applyFilters();
+                        },
+                      ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -416,18 +421,176 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           const SizedBox(width: 8),
           IconButton(
             icon: Icon(
-              _isFilterExpanded ? Icons.filter_list_off : Icons.filter_list,
-              color: _isFilterExpanded ? const Color(0xFF008000) : Colors.grey,
-            ),
-            onPressed: () {
-              setState(() {
-                _isFilterExpanded = !_isFilterExpanded;
-              });
+              Icons.filter_list,
+              color: (_fromDate != null || _toDate != null) ? const Color(0xFF008000) : Colors.grey,
+            ),            onPressed: () {
+              // Show filter popup instead of expanding
+              _showFilterPopup(context);
             },
-            tooltip: 'Toggle Filters',
+            tooltip: 'Filters',
           ),
         ],
       ),
+    );
+  }
+  
+  // Show filter popup dialog
+  void _showFilterPopup(BuildContext context) {
+    // Create temporary date holders for the popup
+    DateTime? tempFromDate = _fromDate;
+    DateTime? tempToDate = _toDate;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  const Icon(Icons.filter_list, color: Color(0xFF008000)),
+                  const SizedBox(width: 8),
+                  const Text('Order Filters'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // From Date
+                    const Text(
+                      'From Date',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: tempFromDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+
+                        if (pickedDate != null) {
+                          setState(() {
+                            tempFromDate = pickedDate;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              tempFromDate != null
+                                  ? DateFormat('dd/MM/yyyy').format(tempFromDate!)
+                                  : 'Select From Date',
+                              style: TextStyle(
+                                color: tempFromDate != null ? Colors.black : Colors.grey.shade600,
+                              ),
+                            ),
+                            const Icon(Icons.calendar_today, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // To Date
+                    const Text(
+                      'To Date',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: tempToDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+
+                        if (pickedDate != null) {
+                          setState(() {
+                            tempToDate = pickedDate;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              tempToDate != null
+                                  ? DateFormat('dd/MM/yyyy').format(tempToDate!)
+                                  : 'Select To Date',
+                              style: TextStyle(
+                                color: tempToDate != null ? Colors.black : Colors.grey.shade600,
+                              ),
+                            ),
+                            const Icon(Icons.calendar_today, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    // Reset filters
+                    Navigator.pop(context);
+                    this.setState(() {
+                      _fromDate = null;
+                      _toDate = null;
+                    });
+                    _resetFilters();
+                  },
+                  child: const Text('Reset'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Cancel without applying
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Apply filters and close popup
+                    Navigator.pop(context);
+                    this.setState(() {
+                      _fromDate = tempFromDate;
+                      _toDate = tempToDate;
+                    });
+                    _applyFilters();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF008000),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

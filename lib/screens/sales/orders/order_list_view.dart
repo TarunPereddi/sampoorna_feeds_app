@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'order_detail_view.dart';
 
 class OrderListView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -175,7 +176,6 @@ class OrderListView extends StatelessWidget {
       ),
     );
   }
-
   // Show order details dialog
   void _showViewOrderDetails(BuildContext context, Map<String, dynamic> order) {
     showModalBottomSheet(
@@ -196,101 +196,9 @@ class OrderListView extends StatelessWidget {
               child: ListView(
                 controller: scrollController,
                 children: [
-                  // Order header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Order ${order['id']}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-
-                  // Order status
-                  Center(child: _buildStatusChip(order['status'] as String)),
-                  const SizedBox(height: 16),
-
-                  // Order details table
-                  Table(
-                    columnWidths: const {
-                      0: FlexColumnWidth(1),
-                      1: FlexColumnWidth(2),
-                    },
-                    children: [
-                      _buildTableRow('Customer', order['customerName']),
-                      _buildTableRow('Date', order['date']),
-                      _buildTableRow('Amount', order['amount']),
-                      // Add more details as needed
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Dummy order items (mock data)
-                  const Text(
-                    'Order Items',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Mock order items
-                  Card(
-                    child: ListTile(
-                      title: const Text('Protein Supplement'),
-                      subtitle: const Text('Quantity: 2'),
-                      trailing: const Text('₹8,000'),
-                    ),
-                  ),
-                  Card(
-                    child: ListTile(
-                      title: const Text('Chicken Feed Type A'),
-                      subtitle: const Text('Quantity: 5'),
-                      trailing: const Text('₹15,500'),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Action buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          // Print order logic
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.print, size: 16),
-                        label: const Text('Print'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showEditOrderDialog(context, order);
-                        },
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('Edit'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
+                  OrderDetailView(
+                    order: order,
+                    onEdit: () => _showEditOrderDialog(context, order),
                   ),
                 ],
               ),
@@ -300,33 +208,7 @@ class OrderListView extends StatelessWidget {
       },
     );
   }
-
-  // Helper to build table rows for order details
-  TableRow _buildTableRow(String label, String value) {
-    return TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // Since we're using OrderDetailView, this method is no longer needed
 
   // Show edit order dialog
   void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
