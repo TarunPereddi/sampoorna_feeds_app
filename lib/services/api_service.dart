@@ -278,9 +278,8 @@ class ApiService {
     final response = await get('ItemList', queryParams: queryParams);
     return response['value'];
   }
-
   // Get sales orders with filtering and pagination
-  Future<List<dynamic>> getSalesOrders({
+  Future<dynamic> getSalesOrders({
     String? searchQuery,
     String? status,
     DateTime? fromDate,
@@ -288,6 +287,7 @@ class ApiService {
     String? salesPersonName,
     int limit = 10,
     int offset = 0,
+    bool includeCount = false,
   }) async {
     Map<String, String> queryParams = {};
     List<String> filters = [];
@@ -296,6 +296,11 @@ class ApiService {
     queryParams['\$top'] = limit.toString();
     queryParams['\$skip'] = offset.toString();
     queryParams['\$orderby'] = 'Order_Date desc';
+    
+    // Add count parameter if requested
+    if (includeCount) {
+      queryParams['\$count'] = 'true';
+    }
 
     // Add sales person filter
     if (salesPersonName != null && salesPersonName.isNotEmpty) {
@@ -337,6 +342,13 @@ class ApiService {
     }
 
     final response = await get('SalesOrder', queryParams: queryParams);
+    
+    // If count was requested, return the full response with @odata.count
+    if (includeCount) {
+      return response;
+    }
+    
+    // Otherwise just return the value array as before
     return response['value'];
   }
 

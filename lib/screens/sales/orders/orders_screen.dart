@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
-import '../../../models/sales_order.dart';
 import 'create_order_screen.dart';
 import 'order_list_view.dart';
 import 'order_table_view.dart';
@@ -16,7 +15,10 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderStateMixin {
+  // Tab controller for status tabs
+  late TabController _tabController;
+  
   // Filter state
   String _selectedStatus = 'All';
   String _searchQuery = '';
@@ -30,37 +32,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   // For handling pagination
   int _currentPage = 1;
+  int _totalPages = 1;
+  int _totalRecords = 0;
   final int _itemsPerPage = 10;
   bool _isLoading = false;
   bool _isInitialLoading = true;
-  bool _hasMoreOrders = true;
-
-  // Status filter options
-  final List<String> _statusOptions = [
+  // Status filter options - matching with tabs
+  final List<String> _statusTabs = [
     'All',
-    'Released',
-    'Open',
-    'Completed',
-    'Archived',
+    'Open', 
+    'Pending Approval',
+    'Approved',
   ];
 
   // Search controller
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _searchController.text = _searchQuery;
-
-    // Add scroll listener for infinite scroll
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-        if (!_isLoading && _hasMoreOrders) {
-          _loadMoreOrders();
-        }
-      }
-    });
+    
+    // Initialize tab controller with tabs
+    _tabController = TabController(length: _statusTabs.length, vsync: this);
+    
+    // Add listener to tab controller to reload data when tab changes
+    _tabController.addListener(_onTabChanged);
 
     // Initial load of orders
     _loadOrders();
@@ -69,17 +66,46 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     super.dispose();
   }
+  
+  // Handler for tab changes
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging || _tabController.index != _statusTabs.indexOf(_selectedStatus)) {
+      setState(() {
+        _selectedStatus = _statusTabs[_tabController.index];
+        // Reset pagination
+        _currentPage = 1;
+        _allOrders = [];
+      });
+      // Reload orders with new status filter
+      _loadOrders();
+    }
+  }  // Convert tab index to API status value
+  String? _getApiStatusValue(String tabStatus) {
+    // Return null for "All" to not filter by status
+    if (tabStatus == 'All') return null;
+    
+    // Map the tab names to actual API status values
+    switch (tabStatus) {
+      case 'Open': return 'Open';
+      case 'Pending': return 'Pending Approval'; // Changed to match exact API value
+      case 'Approved': return 'Released'; // Changed to match exact API value
+      default: return null;
+    }
+  }
 
-  // Load orders from API
+  // Load orders from API with pagination
   Future<void> _loadOrders() async {
     if (_isLoading) return;
 
     setState(() {
       _isLoading = true;
-      _isInitialLoading = true;
+      if (_currentPage == 1) {
+        _isInitialLoading = true;
+      }
     });
 
     try {
@@ -88,24 +114,27 @@ class _OrdersScreenState extends State<OrdersScreen> {
       
       if (salesPerson == null) {
         throw Exception('User not authenticated');
-      }
-
-      final orders = await _apiService.getSalesOrders(
+      }      // Use the updated getSalesOrders method with includeCount=true
+      final response = await _apiService.getSalesOrders(
         salesPersonName: salesPerson.name,
         searchQuery: _searchQuery,
-        status: _selectedStatus != 'All' ? _selectedStatus : null,
+        status: _getApiStatusValue(_selectedStatus),
         fromDate: _fromDate,
         toDate: _toDate,
         limit: _itemsPerPage,
-        offset: 0,
+        offset: (_currentPage - 1) * _itemsPerPage,
+        includeCount: true,
       );
-
+      
+      // Extract total count from @odata.count
+      final totalCount = response['@odata.count'] as int? ?? 0;
+      
       setState(() {
-        _allOrders = orders;
+        _allOrders = response['value'] as List;
+        _totalRecords = totalCount;
+        _totalPages = (totalCount / _itemsPerPage).ceil();
         _isLoading = false;
         _isInitialLoading = false;
-        _currentPage = 1;
-        _hasMoreOrders = orders.length == _itemsPerPage;
       });
     } catch (e) {
       setState(() {
@@ -121,73 +150,51 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
-  // Load more orders when scrolling to bottom (for pagination)
-  Future<void> _loadMoreOrders() async {
-    if (_isLoading || !_hasMoreOrders) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final salesPerson = authService.currentUser;
-      
-      if (salesPerson == null) {
-        throw Exception('User not authenticated');
-      }
-
-      final offset = _currentPage * _itemsPerPage;
-      
-      final moreOrders = await _apiService.getSalesOrders(
-        salesPersonName: salesPerson.code,
-        searchQuery: _searchQuery,
-        status: _selectedStatus != 'All' ? _selectedStatus : null,
-        fromDate: _fromDate,
-        toDate: _toDate,
-        limit: _itemsPerPage,
-        offset: offset,
-      );
-
+  // Navigate to previous page
+  void _previousPage() {
+    if (_currentPage > 1) {
       setState(() {
-        if (moreOrders.isNotEmpty) {
-          _allOrders.addAll(moreOrders);
-          _currentPage++;
-        }
-        _hasMoreOrders = moreOrders.length == _itemsPerPage;
-        _isLoading = false;
+        _currentPage--;
       });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading more orders: $e')),
-        );
-      }
+      _loadOrders();
     }
   }
 
-  // Refresh orders (e.g., on pull-to-refresh)
+  // Navigate to next page
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+      _loadOrders();
+    }
+  }
+
+  // Refresh orders
   Future<void> _refreshOrders() async {
+    setState(() {
+      _currentPage = 1;
+    });
     await _loadOrders();
   }
 
   // Apply search and filters
   void _applyFilters() {
+    setState(() {
+      _currentPage = 1;
+      _searchQuery = _searchController.text;
+    });
     _loadOrders();
   }
 
   // Reset all filters
   void _resetFilters() {
     setState(() {
-      _selectedStatus = 'All';
       _searchController.text = '';
       _searchQuery = '';
       _fromDate = null;
       _toDate = null;
+      _currentPage = 1;
     });
     
     _loadOrders();
@@ -251,46 +258,126 @@ class _OrdersScreenState extends State<OrdersScreen> {
         backgroundColor: const Color(0xFF008000),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: _isInitialLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-        onRefresh: _refreshOrders,
-        child: Column(
-          children: [
-            // Search bar
-            _buildSearchBar(),
-
-            // Advanced filters section
-            _buildAdvancedFilters(isSmallScreen),
-
-            // Orders list or empty state
-            Expanded(
-              child: _allOrders.isEmpty
-                  ? _buildEmptyState()
-                  : Padding(
-                padding: const EdgeInsets.all(16),
-                child: isSmallScreen
-                    ? OrderListView(
-                  orders: viewOrders,
-                  scrollController: _scrollController,
-                )
-                    : OrderTableView(
-                  orders: viewOrders,
-                  scrollController: _scrollController,
-                ),
+      body: Column(
+        children: [
+          // Search bar
+          _buildSearchBar(),          // Status Tabs (below search bar, like in query screen)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade300, width: 1),
               ),
             ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: false,
+              indicatorColor: const Color(0xFF008000),
+              labelColor: const Color(0xFF008000),
+              unselectedLabelColor: Colors.grey.shade700,
+              tabs: _statusTabs.map((status) => Tab(text: status)).toList(),
+            ),
+          ),
 
-            // Loading indicator for pagination
-            if (_isLoading && !_isInitialLoading)
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Center(
-                  child: CircularProgressIndicator(),
+          // Advanced filters section
+          _buildAdvancedFilters(isSmallScreen),          // Orders list or empty state
+          _isInitialLoading
+              ? const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: _statusTabs.map((tabStatus) {
+                      // The content will be the same for each tab
+                      // TabController handles the switching and state management
+                      return RefreshIndicator(
+                        onRefresh: _refreshOrders,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: _allOrders.isEmpty
+                                ? _buildEmptyState()
+                                : Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: isSmallScreen
+                                      ? OrderListView(
+                                          orders: viewOrders,
+                                          scrollController: ScrollController(),
+                                        )
+                                      : OrderTableView(
+                                          orders: viewOrders,
+                                          scrollController: ScrollController(),
+                                        ),
+                                  ),
+                            ),
+                            
+                            // Pagination controls
+                            if (_totalRecords > 0)
+                              _buildPaginationControls(),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
-          ],
-        ),
+        ],
+      ),
+    );
+  }
+  // Build pagination controls
+  Widget _buildPaginationControls() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start, // Changed to start alignment
+        children: [
+          // Previous page button
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _currentPage > 1 ? _previousPage : null,
+            tooltip: 'Previous Page',
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          
+          // Page indicator
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              'Page $_currentPage of $_totalPages',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          
+          // Next page button
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: _currentPage < _totalPages ? _nextPage : null,
+            tooltip: 'Next Page',
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          
+          // Records count - placed after navigation controls
+          const SizedBox(width: 12),
+          Text(
+            '($_totalRecords items)',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
@@ -307,13 +394,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
               decoration: InputDecoration(
                 hintText: 'Search by Order ID or Customer',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
+                suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     setState(() {
                       _searchController.clear();
-                      _searchQuery = '';
                     });
                     _applyFilters();
                   },
@@ -324,11 +410,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
-              },
               onSubmitted: (_) => _applyFilters(),
             ),
           ),
@@ -354,7 +435,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget _buildAdvancedFilters(bool isSmallScreen) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      height: _isFilterExpanded ? (isSmallScreen ? 270 : 180) : 0,
+      height: _isFilterExpanded ? (isSmallScreen ? 180 : 120) : 0,
       child: SingleChildScrollView(
         physics: const NeverScrollableScrollPhysics(),
         child: Padding(
@@ -374,14 +455,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Status and Date Filter Row(s)
+                  // Date Filter Row(s)
                   if (isSmallScreen)
                   // Small screen - stack vertically
                     Column(
                       children: [
-                        // Status Dropdown
-                        _buildStatusDropdown(),
-                        const SizedBox(height: 16),
                         // Date Range Pickers
                         _buildDateRangePickers(),
                         const SizedBox(height: 16),
@@ -395,12 +473,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       children: [
                         Row(
                           children: [
-                            // Status Dropdown
-                            Expanded(child: _buildStatusDropdown()),
-                            const SizedBox(width: 16),
                             // Date Range Pickers
                             Expanded(
-                              flex: 2,
                               child: _buildDateRangePickers(),
                             ),
                           ],
@@ -416,33 +490,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // Build the status dropdown filter
-  Widget _buildStatusDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedStatus,
-      decoration: InputDecoration(
-        labelText: 'Status',
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-      items: _statusOptions.map((status) {
-        return DropdownMenuItem<String>(
-          value: status,
-          child: Text(status),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) {
-          setState(() {
-            _selectedStatus = value;
-          });
-        }
-      },
     );
   }
 
@@ -577,18 +624,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No orders found matching your filters',
+            'No ${_selectedStatus.toLowerCase()} orders found',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey.shade600,
             ),
           ),
           const SizedBox(height: 16),
-          TextButton.icon(
-            onPressed: _resetFilters,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reset Filters'),
-          ),
+          if (_searchQuery.isNotEmpty || _fromDate != null || _toDate != null)
+            TextButton.icon(
+              onPressed: _resetFilters,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reset Filters'),
+            ),
         ],
       ),
     );
