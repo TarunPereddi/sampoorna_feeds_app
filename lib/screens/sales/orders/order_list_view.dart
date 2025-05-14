@@ -277,7 +277,7 @@ class OrderListView extends StatelessWidget {
 
 // Navigate to edit screen
 void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
-  // Navigate to the edit screen passing only the order number
+  // Use direct navigation since named routes are causing issues
   Navigator.push(
     context,
     MaterialPageRoute(
@@ -553,15 +553,16 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
-        ),
-        ElevatedButton(
+        ),        ElevatedButton(
           onPressed: () {
             Navigator.pop(context);
             
-            // Navigate using the named route
-            Navigator.of(context).pushNamed(
-              '/edit_order',
-              arguments: order['id'],
+            // Use direct navigation since named routes are causing issues
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => EditOrderScreen(orderNo: order['id']),
+              ),
             ).then((_) {
               // Refresh the orders list when returning
               if (onRefresh != null) {
