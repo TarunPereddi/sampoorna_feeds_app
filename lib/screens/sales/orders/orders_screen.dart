@@ -299,15 +299,16 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                               child: _allOrders.isEmpty
                                 ? _buildEmptyState()
                                 : Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: isSmallScreen
+                                    padding: const EdgeInsets.all(16),                                    child: isSmallScreen
                                       ? OrderListView(
                                           orders: viewOrders,
                                           scrollController: ScrollController(),
+                                          onRefresh: _refreshOrders,
                                         )
                                       : OrderTableView(
                                           orders: viewOrders,
                                           scrollController: ScrollController(),
+                                          onRefresh: _refreshOrders,
                                         ),
                                   ),
                             ),

@@ -483,4 +483,48 @@ class ApiService {
       totalCount: totalCount,
     );
   }
+
+  // Send order for approval
+  Future<Map<String, dynamic>> sendOrderForApproval(String orderNo) async {
+    // Create request body
+    Map<String, dynamic> body = {
+      "salesOrderNo": orderNo
+    };
+    
+    debugPrint('Sending order for approval: $body');
+    
+    try {
+      final response = await post('API_SendApprovalRequest', body: body);
+      
+      // Log the response for debugging
+      debugPrint('Send for Approval Response: $response');
+      
+      // Create a standardized response structure
+      Map<String, dynamic> result = {
+        'success': true,
+        'message': 'Order sent for approval successfully'
+      };
+      
+      // If there's a specific message in the response, use it
+      if (response != null && response is Map<String, dynamic>) {
+        if (response.containsKey('message')) {
+          result['message'] = response['message'];
+        } else if (response.containsKey('value') && 
+                  response['value'] != null && 
+                  response['value'] is String) {
+          result['message'] = response['value'];
+        }
+      }
+      
+      return result;
+    } catch (e) {
+      debugPrint('Error sending order for approval: $e');
+      
+      // Create an error response
+      return {
+        'success': false,
+        'message': e.toString()
+      };
+    }
+  }
 }

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
   final ScrollController scrollController;
+  final VoidCallback? onRefresh;
 
   const OrderTableView({
     super.key,
     required this.orders,
     required this.scrollController,
+    this.onRefresh,
   });
 
   @override
@@ -40,6 +43,17 @@ class OrderTableView extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Add Send for Approval button only for Open orders
+                        if (order['status'] == 'Open')
+                          IconButton(
+                            icon: const Icon(Icons.check_circle, size: 20),
+                            onPressed: () {
+                              // Show send for approval confirmation
+                              _showSendForApprovalDialog(context, order['id']);
+                            },
+                            tooltip: 'Send for Approval',
+                            color: Colors.green,
+                          ),
                         IconButton(
                           icon: const Icon(Icons.visibility, size: 20),
                           onPressed: () {
@@ -131,25 +145,138 @@ class OrderTableView extends StatelessWidget {
     );
   }
   // This method is no longer needed since we're using OrderDetailView
-
   // Show edit order dialog
   void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
-    // This would be implemented to edit the order
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit Order'),
+        title: Row(
+          children: [
+            const Icon(Icons.edit, color: Colors.orange),
+            const SizedBox(width: 8),
+            const Text('Edit Order'),
+          ],
+        ),
         content: const Text(
-            'Order editing functionality will be implemented with API integration.'
+          'Are you sure you want to edit this order? Editing will re-open the order for modifications.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // For now, just show a message that editing is in progress
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Edit functionality coming soon'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Edit Order'),
           ),
         ],
       ),
     );
   }
-  // Print dialog removed as per requirements
+  // Show send for approval confirmation dialog
+  void _showSendForApprovalDialog(BuildContext context, String orderNo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            const Text('Send for Approval'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to send order $orderNo for approval? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _sendOrderForApproval(context, orderNo);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Send for Approval'),
+          ),
+        ],
+      ),
+    );
+  }  // Process the API call to send order for approval
+  Future<void> _sendOrderForApproval(BuildContext context, String orderNo) async {
+    // Store dialog context to ensure it can be closed even if parent context is disposed
+    BuildContext? dialogContext;
+    
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        dialogContext = context;
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(color: Colors.green),
+              const SizedBox(width: 16),
+              Text('Sending order $orderNo for approval...'),
+            ],
+          ),
+        );
+      },
+    );
+    
+    final apiService = ApiService();
+    
+    // Call the API - the sendOrderForApproval method now returns a structured response
+    final result = await apiService.sendOrderForApproval(orderNo);
+    
+    // Make sure to close the dialog - if dialogContext is null use normal context
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    } else if (Navigator.canPop(context)) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    // Handle the result
+    if (result['success'] == true) {
+      // Show success message with API response message if available
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Order sent for approval successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Refresh the orders list if callback is provided
+      if (onRefresh != null) {
+        onRefresh!();
+      }
+    } else {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send order for approval: ${result['message'] ?? "Unknown error"}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 }
