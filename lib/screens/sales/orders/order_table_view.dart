@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
+import 'edit_order_screen.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -146,47 +147,57 @@ class OrderTableView extends StatelessWidget {
   }
   // This method is no longer needed since we're using OrderDetailView
   // Show edit order dialog
+
   void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.edit, color: Colors.orange),
-            const SizedBox(width: 8),
-            const Text('Edit Order'),
-          ],
-        ),
-        content: const Text(
-          'Are you sure you want to edit this order? Editing will re-open the order for modifications.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // For now, just show a message that editing is in progress
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Edit functionality coming soon'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Edit Order'),
-          ),
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.edit, color: Colors.orange),
+          const SizedBox(width: 8),
+          const Text('Edit Order'),
         ],
       ),
-    );
-  }
-  // Show send for approval confirmation dialog
+      content: const Text(
+        'Are you sure you want to edit this order? Editing will re-open the order for modifications.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            
+            // Navigate to the edit order screen
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => EditOrderScreen(
+                  orderNo: order['id'],
+                ),
+              ),
+            ).then((_) {
+              // Refresh the orders list when returning
+              if (onRefresh != null) {
+                onRefresh!();
+              }
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Edit Order'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Show send for approval confirmation dialog
   void _showSendForApprovalDialog(BuildContext context, String orderNo) {
     showDialog(
       context: context,

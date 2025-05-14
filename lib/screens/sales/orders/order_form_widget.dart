@@ -124,6 +124,8 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         _shipToLocations = [];
       });
     }
+    widget.onUpdate('shipTo', null);
+  widget.onUpdate('shipToCode', '');
   }
 
   Customer? _getCustomerByName(String customerName) {
@@ -263,11 +265,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       setState(() {
         _isLoadingLocations = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading locations: $e')),
-        );
-      }
+      // if (mounted) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     SnackBar(content: Text('Error loading locations: $e')),
+      //   );
+      // }
     }
   }
 

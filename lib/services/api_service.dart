@@ -527,4 +527,44 @@ class ApiService {
       };
     }
   }
+
+
+  /// Re-opens a sales order to make it editable
+Future<Map<String, dynamic>> reopenSalesOrder(String orderNo) async {
+  if (orderNo.isEmpty) {
+    throw Exception('Order number cannot be empty');
+  }
+  
+  final body = {
+    "salesOrderNo": orderNo
+  };
+  
+  try {
+    final response = await post('API_ReOpenSalesOrder', body: body);
+    return response;
+  } catch (e) {
+    debugPrint('Error reopening sales order: $e');
+    throw Exception('Failed to reopen sales order: $e');
+  }
+}
+
+/// Deletes a sales order line
+Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) async {
+  if (orderNo.isEmpty) {
+    throw Exception('Order number cannot be empty');
+  }
+  
+  final body = {
+    "orderNo": orderNo,
+    "lineNo": lineNo
+  };
+  
+  try {
+    final response = await post('API_SalesOrderLine', body: body);
+    return response;
+  } catch (e) {
+    debugPrint('Error deleting sales order line: $e');
+    throw Exception('Failed to delete sales order line: $e');
+  }
+}
 }

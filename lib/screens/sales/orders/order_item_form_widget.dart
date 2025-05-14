@@ -60,6 +60,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   bool _isUomDialogOpen = false;
   bool _skipPriceUpdate = false;
 
+  bool _isPriceAvailable = false;
+
   // Fallback units of measure for when API doesn't return any units
   final List<String> _fallbackUnitsOfMeasure = [
     'Bag',
@@ -106,16 +108,19 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   }
 
   @override
-  void didUpdateWidget(OrderItemFormWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
+void didUpdateWidget(OrderItemFormWidget oldWidget) {
+  super.didUpdateWidget(oldWidget);
+  
+  // Reset form if location changed
+  if (widget.locationCode != oldWidget.locationCode) {
+    _resetItemForm(); // Add this line to reset the form
     
-    // Fetch items if location changed
-    if (widget.locationCode != oldWidget.locationCode && 
-        widget.locationCode != null && 
-        widget.locationCode!.isNotEmpty) {
+    // Fetch items if location changed and not empty
+    if (widget.locationCode != null && widget.locationCode!.isNotEmpty) {
       _fetchItems(widget.locationCode!);
     }
   }
+}
 
   Future<void> _fetchItems(String locationCode) async {
     setState(() {
@@ -264,6 +269,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       } else {
         _selectedUnitOfMeasure = 'Kg';
       }
+
+      _isPriceAvailable = false;
     });
     
     // Calculate total if quantity is set
@@ -288,6 +295,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     _itemSearchController.dispose();
     super.dispose();
   }
+
+  
 
   // Calculate total for the current item
   void _calculateItemTotal() {
@@ -352,7 +361,16 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       return;
     }
     
-    // Price validation removed - allowing any price including zero
+    // Add this check for price availability
+  if (!_isPriceAvailable || _price <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Price not available for this item. Please select another item.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
 
     final Map<String, dynamic> newItem = {
       'itemNo': _selectedItem!.no,
@@ -380,6 +398,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     
     setState(() {
       _isLoadingPrice = true; // Start loading
+      _isPriceAvailable = false;
     });
     
     try {
@@ -394,7 +413,7 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       
       if (!mounted) return; // Check again after async operation
       
-      if (priceData != null && priceData.containsKey('Unit_Price')) {
+      if (priceData != null && priceData.isNotEmpty && priceData.containsKey('Unit_Price')) {
         // Get the price from the API response
         double newPrice = 0;
         if (priceData['Unit_Price'] != null) {
@@ -419,20 +438,22 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
           _mrpController.text = _mrp.toString();
           
           _isLoadingPrice = false;
+                  _isPriceAvailable = true; // Set price as available
+
         });
         
         // Always recalculate after price changes, outside of setState
         _calculateItemTotal();
         
       } else {
-        if (!mounted) return; // Check again
-        
-        setState(() {
-          _isLoadingPrice = false;
-          // Set default values if API didn't return anything
-          _price = _mrp;
-          _priceController.text = _price.toString();
-        });
+         setState(() {
+        _isLoadingPrice = false;
+        _isPriceAvailable = false;
+        _price = 0;
+        _priceController.text = '0.0';
+        _mrp = 0;
+        _mrpController.text = '0.0';
+      });
         
         // Recalculate with default prices
         _calculateItemTotal();
@@ -440,10 +461,15 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         // Show message about using default price
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Using default price. Specific pricing not available.'),
-            backgroundColor: Colors.orange,
+             content: Text('Price not available for this item. Please select another item.'),
+          backgroundColor: Colors.red,
           ),
         );
+        setState(() {
+        _selectedItem = null;
+        _selectedUnitOfMeasure = null;
+        _itemSearchController.clear();
+      });
       }
     } catch (e) {
       if (!mounted) return; // Check again
@@ -451,10 +477,10 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
       debugPrint('Error fetching sales price: $e');
       
       setState(() {
-        _isLoadingPrice = false;
-        // Set default values if API had an error
-        _price = _mrp;
-        _priceController.text = _price.toString();
+        _selectedItem = null;
+      _selectedUnitOfMeasure = null;
+      _itemSearchController.clear();
+      _isPriceAvailable = false;
       });
       
       // Recalculate with default prices
@@ -598,8 +624,9 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
               const SizedBox(height: 16),
 
               // Check if location is selected
-              if (widget.locationCode == null || widget.locationCode!.isEmpty)
-                Container(
+              if (widget.locationCode == null || widget.locationCode!.isEmpty || 
+                widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty)
+              Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.amber.shade50,
@@ -612,25 +639,27 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
                       SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          'Please select a location in the order form to view available items',
-                          style: TextStyle(fontSize: 14),
+                        'Please select a customer and location in the order form to view available items',
+                        style: TextStyle(fontSize: 14),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-              if (widget.locationCode != null && widget.locationCode!.isNotEmpty)
-                // Layout based on screen size
-                widget.isSmallScreen
+              if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
+                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty)
+              // Layout based on screen size
+              widget.isSmallScreen
                     ? _buildSmallScreenLayout()
                     : _buildLargeScreenLayout(),
 
               const SizedBox(height: 16),
 
               // Add Button
-              if (widget.locationCode != null && widget.locationCode!.isNotEmpty)
-                Align(
+              if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
+                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty)
+              Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton.icon(
                     onPressed: _addItemToOrder,

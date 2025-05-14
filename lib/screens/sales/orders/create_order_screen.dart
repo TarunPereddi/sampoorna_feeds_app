@@ -143,6 +143,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           _orderData['locationCode'] = '';
           debugPrint('Error extracting location code: $e');
         }
+
+         _orderData['items'] = <Map<String, dynamic>>[];
       }
     });
   }
@@ -346,10 +348,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       
       print('Order submission error: $e');
       
-      setState(() {
-        _isSubmitting = false;
-        _submissionStatus = 'Error: ${_getReadableErrorMessage(e)}';
-      });
+      // Extract error message from API response if available
+    String errorMessage = _getReadableErrorMessage(e);
+    
+    setState(() {
+      _isSubmitting = false;
+      _submissionStatus = 'Error: $errorMessage';
+    });
 
       // Show error message dialog instead of snackbar for more visibility
       if (isCurrentlyMounted) {
@@ -386,6 +391,33 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   // Handle API errors with user-friendly messages
   String _getReadableErrorMessage(dynamic error) {
     String errorMessage = error.toString();
+
+  // Check for API error response in JSON format
+ if (errorMessage.contains("error") && errorMessage.contains("message")) {
+    try {
+      // Extract just the message part from the error response
+      final RegExp messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+      final match = messageRegex.firstMatch(errorMessage);
+      
+      if (match != null && match.groupCount >= 1) {
+        String apiMessage = match.group(1) ?? errorMessage;
+        
+        // Remove the CorrelationId portion if present
+        if (apiMessage.contains("CorrelationId")) {
+          apiMessage = apiMessage.split("CorrelationId")[0].trim();
+          // Remove trailing punctuation if any
+          if (apiMessage.endsWith(".") || apiMessage.endsWith(",") || apiMessage.endsWith(" ")) {
+            apiMessage = apiMessage.substring(0, apiMessage.length - 1).trim();
+          }
+        }
+        
+        return apiMessage;
+      }
+    } catch (e) {
+      // If parsing fails, continue with general handling
+      print('Error parsing API error message: $e');
+    }
+  }
 
     // Check for specific error patterns and provide friendly messages
     if (errorMessage.contains('Failed to connect')) {
@@ -626,9 +658,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             ElevatedButton(
               child: const Text('Close'),
               onPressed: () {
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Return to previous screen
-              },
+      // First close the dialog, then go back to previous screen
+      Navigator.of(context).pop(); // Close dialog
+      // Use popUntil to go back to the correct screen (e.g. orders screen)
+      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
+    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF008000),
                 foregroundColor: Colors.white,
@@ -695,9 +729,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ElevatedButton(
                 child: Text('Close'),
                 onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Return to previous screen
-                },
+      // First close the dialog, then go back to previous screen
+      Navigator.of(context).pop(); // Close dialog
+      // Use popUntil to go back to the correct screen (e.g. orders screen)
+      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
+    },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
@@ -784,9 +820,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ElevatedButton(
                 child: Text('Go Back'),
                 onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Return to previous screen
-                },
+      // First close the dialog, then go back to previous screen
+      Navigator.of(context).pop(); // Close dialog
+      // Use popUntil to go back to the correct screen (e.g. orders screen)
+      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
+    },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
