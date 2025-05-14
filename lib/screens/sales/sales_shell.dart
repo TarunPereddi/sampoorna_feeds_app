@@ -4,6 +4,7 @@ import 'home/home_screen.dart';
 import 'orders/orders_screen.dart'; // We'll keep this import but update the file
 import 'queries/queries_screen.dart';
 import 'profile/profile_screen.dart';
+import 'orders/edit_order_screen.dart';
 
 class SalesShell extends StatefulWidget {
   const SalesShell({super.key});
@@ -129,14 +130,28 @@ class _SalesShellState extends State<SalesShell> {
   }
 
   // Helper method to build a Navigator for each tab
-  Widget _buildTabNavigator(int index, WidgetBuilder rootScreenBuilder) {
+ Widget _buildTabNavigator(int index, WidgetBuilder rootScreenBuilder) {
     return Navigator(
       key: _navigatorKeys[index],
-      onGenerateRoute: (settings) {
-        return MaterialPageRoute(
-          settings: settings,
-          builder: rootScreenBuilder,
-        );
+      onGenerateRoute: (RouteSettings settings) {
+        // For the root route of each tab
+        if (settings.name == '/' || settings.name == null) {
+          return MaterialPageRoute(
+            settings: settings,
+            builder: rootScreenBuilder,
+          );
+        }
+        
+        // Special handling for edit order in the orders tab (index 1)
+        if (settings.name == '/edit_order' && index == 1) {
+          final orderNo = settings.arguments as String;
+          return MaterialPageRoute(
+            settings: settings,
+            builder: (context) => EditOrderScreen(orderNo: orderNo),
+          );
+        }
+        
+        return null;
       },
     );
   }

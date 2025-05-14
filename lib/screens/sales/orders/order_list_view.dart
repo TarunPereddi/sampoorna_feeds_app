@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
+import 'edit_order_screen.dart';
 
 class OrderListView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -106,48 +107,63 @@ class OrderListView extends StatelessWidget {
                 ),
                 const Divider(height: 24),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // Add Send for Approval button only for Open orders
-                    if (order['status'] == 'Open')
-                      TextButton.icon(
-                        onPressed: () {
-                          // Show send for approval confirmation
-                          _showSendForApprovalDialog(context, order['id']);
-                        },
-                        icon: const Icon(Icons.check_circle, size: 18),
-                        label: const Text('Send for Approval'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.green,
-                        ),
-                      ),
-                    if (order['status'] == 'Open')
-                      const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        // View order details
-                        _showViewOrderDetails(context, order);
-                      },
-                      icon: const Icon(Icons.visibility, size: 18),
-                      label: const Text('View'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        // Edit order
-                        _showEditOrderDialog(context, order);
-                      },
-                      icon: const Icon(Icons.edit, size: 18),
-                      label: const Text('Edit'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.orange,
-                      ),
-                    ),
-                  ],
-                ),
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    // Add Send for Approval button only for Open orders
+    if (order['status'] == 'Open')
+      TextButton.icon(
+        onPressed: () {
+          // Show send for approval confirmation
+          _showSendForApprovalDialog(context, order['id']);
+        },
+        icon: const Icon(Icons.check_circle, size: 18),
+        label: const Text('Send for Approval'),
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.green,
+        ),
+      ),
+    if (order['status'] == 'Open')
+      const SizedBox(width: 8),
+    TextButton.icon(
+      onPressed: () {
+        // View order details
+        _showViewOrderDetails(context, order);
+      },
+      icon: const Icon(Icons.visibility, size: 18),
+      label: const Text('View'),
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.blue,
+      ),
+    ),
+    const SizedBox(width: 8),
+    TextButton.icon(
+      onPressed: () {
+        // Edit order
+        _showEditOrderDialog(context, order);
+      },
+      icon: const Icon(Icons.edit, size: 18),
+      label: const Text('Edit'),
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.orange,
+      ),
+    ),
+    // Add Reopen button for Pending Approval or Released (Approved) orders
+    if (order['status'] == 'Pending Approval' || order['status'] == 'Released') ...[
+      const SizedBox(width: 8),
+      TextButton.icon(
+        onPressed: () {
+          // Show reopen confirmation
+          _showReopenOrderDialog(context, order['id']);
+        },
+        icon: const Icon(Icons.refresh, size: 18),
+        label: const Text('Reopen'),
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.purple,
+        ),
+      ),
+    ],
+  ],
+),
               ],
             ),
           ),
@@ -195,6 +211,87 @@ class OrderListView extends StatelessWidget {
     );
   }
 
+  Future<void> _reopenOrderAndNavigateToEdit(BuildContext context, Map<String, dynamic> order) async {
+  // Store dialog context to ensure it can be closed even if parent context is disposed
+  BuildContext? dialogContext;
+  
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      dialogContext = context;
+      return AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(color: Colors.orange),
+            const SizedBox(width: 16),
+            Text('Reopening order ${order['id']}...'),
+          ],
+        ),
+      );
+    },
+  );
+  
+  final apiService = ApiService();
+  
+  try {
+    // Call the API to reopen the order
+    final result = await apiService.reopenSalesOrder(order['id']);
+    
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Order reopened successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    
+    // Navigate to edit screen
+    _navigateToEditScreen(context, order);
+    
+    // Refresh the orders list if callback is provided
+    if (onRefresh != null) {
+      onRefresh!();
+    }
+  } catch (e) {
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to reopen order: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+// Navigate to edit screen
+void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
+  // Navigate to the edit screen passing only the order number
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditOrderScreen(orderNo: order['id']),
+    ),
+  ).then((_) {
+    // Refresh the orders list when returning from edit screen
+    if (onRefresh != null) {
+      onRefresh!();
+    }
+  });
+}
+
+
   // Show order details dialog
   void _showViewOrderDetails(BuildContext context, Map<String, dynamic> order) {
     showModalBottomSheet(
@@ -227,6 +324,105 @@ class OrderListView extends StatelessWidget {
       },
     );
   }
+
+
+// Show reopen order confirmation dialog
+void _showReopenOrderDialog(BuildContext context, String orderNo) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.refresh, color: Colors.purple),
+          const SizedBox(width: 8),
+          const Text('Reopen Order'),
+        ],
+      ),
+      content: Text(
+        'Are you sure you want to reopen order $orderNo? This will change the status back to Open.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _reopenOrder(context, orderNo);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.purple,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Reopen'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Process the API call to reopen order
+Future<void> _reopenOrder(BuildContext context, String orderNo) async {
+  // Store dialog context to ensure it can be closed even if parent context is disposed
+  BuildContext? dialogContext;
+  
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      dialogContext = context;
+      return AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(color: Colors.purple),
+            const SizedBox(width: 16),
+            Text('Reopening order $orderNo...'),
+          ],
+        ),
+      );
+    },
+  );
+  
+  final apiService = ApiService();
+  
+  try {
+    // Call the API
+    final result = await apiService.reopenSalesOrder(orderNo);
+    
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Order reopened successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    
+    // Refresh the orders list if callback is provided
+    if (onRefresh != null) {
+      onRefresh!();
+    }
+  } catch (e) {
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to reopen order: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
 
   // Show send for approval confirmation dialog
   void _showSendForApprovalDialog(BuildContext context, String orderNo) {
@@ -325,6 +521,9 @@ class OrderListView extends StatelessWidget {
   // In OrderListView and OrderTableView
 
 // Show edit order dialog
+
+// In order_list_view.dart and order_table_view.dart
+
 void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
   showDialog(
     context: context,
@@ -341,7 +540,7 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Edit functionality is coming soon!',
+            'Are you sure you want to edit? Editing will reopen the order.',
           ),
           const SizedBox(height: 12),
           Text(
@@ -351,23 +550,30 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
         ],
       ),
       actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(
           onPressed: () {
-            Navigator.pop(context); // Just close the dialog
+            Navigator.pop(context);
             
-            // Show a message about the feature being under development
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Edit functionality is under development'),
-                backgroundColor: Colors.blue,
-              ),
-            );
+            // Navigate using the named route
+            Navigator.of(context).pushNamed(
+              '/edit_order',
+              arguments: order['id'],
+            ).then((_) {
+              // Refresh the orders list when returning
+              if (onRefresh != null) {
+                onRefresh!();
+              }
+            });
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
+            backgroundColor: Colors.orange,
             foregroundColor: Colors.white,
           ),
-          child: const Text('OK'),
+          child: const Text('Edit'),
         ),
       ],
     ),

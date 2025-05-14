@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
+import 'edit_order_screen.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -146,6 +147,93 @@ class OrderTableView extends StatelessWidget {
   }
   // This method is no longer needed since we're using OrderDetailView
   // Show edit order dialog
+// Process reopening and then navigate to edit screen
+Future<void> _reopenOrderAndNavigateToEdit(BuildContext context, Map<String, dynamic> order) async {
+  // Store dialog context to ensure it can be closed even if parent context is disposed
+  BuildContext? dialogContext;
+  
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      dialogContext = context;
+      return AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(color: Colors.orange),
+            const SizedBox(width: 16),
+            Text('Reopening order ${order['id']}...'),
+          ],
+        ),
+      );
+    },
+  );
+  
+  final apiService = ApiService();
+  
+  try {
+    // Call the API to reopen the order
+    final result = await apiService.reopenSalesOrder(order['id']);
+    
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Order reopened successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    
+    // Navigate to edit screen
+    _navigateToEditScreen(context, order);
+    
+    // Refresh the orders list if callback is provided
+    if (onRefresh != null) {
+      onRefresh!();
+    }
+  } catch (e) {
+    // Make sure to close the dialog
+    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+      Navigator.of(dialogContext!).pop();
+    }
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to reopen order: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+// Navigate to edit screen
+void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
+  // Navigate to the edit screen passing only the order number
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditOrderScreen(orderNo: order['id']),
+    ),
+  ).then((_) {
+    // Refresh the orders list when returning from edit screen
+    if (onRefresh != null) {
+      onRefresh!();
+    }
+  });
+}
+// Show edit order dialog with reopening confirmation
+
+
+// Show edit order dialog
+// Show edit order dialog with reopening confirmation
+// Show edit order dialog with confirmation
+// In order_list_view.dart and order_table_view.dart
 
 void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
   showDialog(
@@ -163,7 +251,7 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Edit functionality is coming soon!',
+            'Are you sure you want to edit? Editing will reopen the order.',
           ),
           const SizedBox(height: 12),
           Text(
@@ -173,29 +261,35 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
         ],
       ),
       actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(
           onPressed: () {
-            Navigator.pop(context); // Just close the dialog
+            Navigator.pop(context);
             
-            // Show a message about the feature being under development
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Edit functionality is under development'),
-                backgroundColor: Colors.blue,
-              ),
-            );
+            // Navigate using the named route
+            Navigator.of(context).pushNamed(
+              '/edit_order',
+              arguments: order['id'],
+            ).then((_) {
+              // Refresh the orders list when returning
+              if (onRefresh != null) {
+                onRefresh!();
+              }
+            });
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
+            backgroundColor: Colors.orange,
             foregroundColor: Colors.white,
           ),
-          child: const Text('OK'),
+          child: const Text('Edit'),
         ),
       ],
     ),
   );
 }
-
 // Show send for approval confirmation dialog
   void _showSendForApprovalDialog(BuildContext context, String orderNo) {
     showDialog(
