@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
-import 'edit_order_screen.dart';
 
 class OrderListView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -337,44 +336,42 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
           const Text('Edit Order'),
         ],
       ),
-      content: const Text(
-        'Are you sure you want to edit this order? Editing will re-open the order for modifications.',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Edit functionality is coming soon!',
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Order ID: ${order['id']}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
         ElevatedButton(
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pop(context); // Just close the dialog
             
-            // Navigate to the edit order screen
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => EditOrderScreen(
-                  orderNo: order['id'],
-                  
-                ),
+            // Show a message about the feature being under development
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Edit functionality is under development'),
+                backgroundColor: Colors.blue,
               ),
-            ).then((_) {
-              // Refresh the orders list when returning
-              if (onRefresh != null) {
-                onRefresh!();
-              }
-            });
+            );
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
+            backgroundColor: Colors.blue,
             foregroundColor: Colors.white,
           ),
-          child: const Text('Edit Order'),
+          child: const Text('OK'),
         ),
       ],
     ),
   );
 }
- 
- 
- }
+
+}
