@@ -127,27 +127,28 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   // Handle form field updates
   void _handleFormUpdate(String key, dynamic value) {
-    setState(() {
-      _orderData[key] = value;
+  setState(() {
+    _orderData[key] = value;
 
-      // If location is updated, also update locationCode
-      if (key == 'location' && value != null) {
-        // Try to extract the location code from the selected location
-        try {
-          // Find the matching location in _locations list to get its code
-          if (value is String && value.contains(' - ')) {
-            final locationCode = value.split(' - ').first.trim();
-            _orderData['locationCode'] = locationCode;
-          }
-        } catch (e) {
-          _orderData['locationCode'] = '';
-          debugPrint('Error extracting location code: $e');
+    // If location is updated, also update locationCode
+    if (key == 'location' && value != null) {
+      // Try to extract the location code from the selected location
+      try {
+        // Find the matching location in _locations list to get its code
+        if (value is String && value.contains(' - ')) {
+          final locationCode = value.split(' - ').first.trim();
+          _orderData['locationCode'] = locationCode;
         }
-
-         _orderData['items'] = <Map<String, dynamic>>[];
+      } catch (e) {
+        _orderData['locationCode'] = '';
+        debugPrint('Error extracting location code: $e');
       }
-    });
-  }
+
+      _orderData['items'] = <Map<String, dynamic>>[];
+    }
+  });
+}
+
 
   // Submit the order
   void _submitOrder() {
@@ -243,6 +244,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         throw Exception('Invalid location selection');
       }
 
+      // Get delivery date (mandatory)
+    DateTime? deliveryDate = _orderData['deliveryDate'];
+    if (deliveryDate == null) {
+      throw Exception('Delivery date is required');
+    }
+
       // 1. Create the Sales Order Header
       _updateSubmissionStatus('Creating order...');
       
@@ -254,6 +261,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           shipToCode: shipToCode,
           locationCode: locationCode,
           salesPersonCode: salesPerson.code,
+        requestedDeliveryDate: deliveryDate,
         );
       } catch (headerError) {
         print('Error creating sales order header: $headerError');

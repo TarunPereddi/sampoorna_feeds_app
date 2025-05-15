@@ -692,6 +692,17 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             }
           },
         ),
+        if (required && controller.text.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(top: 8.0, left: 12.0),
+          child: Text(
+            'This field is required',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ),
       ],
     );
   }
