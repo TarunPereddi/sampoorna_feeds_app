@@ -571,4 +571,17 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     throw Exception('Failed to delete sales order line: $e');
   }
 }
+
+// Add this to your ApiService class
+  Future<Map<String, dynamic>> getCustomerDetails(String customerNo) async {
+    final response = await get('CustomerList', queryParams: {'\$filter': "No eq '$customerNo'"});
+
+    if (response.containsKey('value') &&
+        response['value'] is List &&
+        response['value'].isNotEmpty) {
+      return response['value'][0];
+    }
+
+    throw Exception('Customer not found');
+  }
 }

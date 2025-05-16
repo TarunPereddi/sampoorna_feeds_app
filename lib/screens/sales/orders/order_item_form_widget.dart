@@ -14,13 +14,15 @@ class OrderItemFormWidget extends StatefulWidget {
   final Function(Map<String, dynamic>) onAddItem;
   final String? locationCode;
   final String? customerPriceGroup; // Add this parameter
+  final bool isEditMode;
 
   const OrderItemFormWidget({
     super.key,
     required this.isSmallScreen,
     required this.onAddItem,
-    this.locationCode,
-    this.customerPriceGroup, // Add to constructor
+    required this.locationCode,
+    required this.customerPriceGroup,
+    this.isEditMode = false,
   });
 
   @override
@@ -389,30 +391,37 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   // Fetch sales price based on customer price group, location, and UOM
   Future<void> _fetchSalesPrice() async {
     if (!mounted) return; // Check if widget is still mounted
-    
-    if (_selectedItem == null || _selectedUnitOfMeasure == null || 
-        widget.locationCode == null || widget.locationCode!.isEmpty ||
-        widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty) {
+
+    // We need all these parameters to fetch a price
+    if (_selectedItem == null ||
+        _selectedUnitOfMeasure == null ||
+        widget.locationCode == null ||
+        widget.locationCode!.isEmpty ||
+        widget.customerPriceGroup == null ||
+        widget.customerPriceGroup!.isEmpty) {
+
+      debugPrint('Cannot fetch price: Missing required parameters');
+      debugPrint('Item: ${_selectedItem?.no}, UoM: $_selectedUnitOfMeasure, Location: ${widget.locationCode}, PriceGroup: ${widget.customerPriceGroup}');
       return;
     }
-    
+
     setState(() {
       _isLoadingPrice = true; // Start loading
       _isPriceAvailable = false;
     });
-    
+
     try {
       debugPrint('Fetching price for: Item=${_selectedItem!.no}, UoM=$_selectedUnitOfMeasure, Location=${widget.locationCode}, PriceGroup=${widget.customerPriceGroup}');
-      
+
       final priceData = await _apiService.getSalesPrice(
         itemNo: _selectedItem!.no,
         customerPriceGroup: widget.customerPriceGroup!,
         locationCode: widget.locationCode!,
         unitOfMeasure: _selectedUnitOfMeasure!,
       );
-      
+
       if (!mounted) return; // Check again after async operation
-      
+
       if (priceData != null && priceData.isNotEmpty && priceData.containsKey('Unit_Price')) {
         // Get the price from the API response
         double newPrice = 0;
@@ -421,7 +430,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               ? (priceData['Unit_Price'] as int).toDouble()
               : priceData['Unit_Price'] as double;
         }
-        
+
         // Get the MRP from the API response
         double newMrp = 0;
         if (priceData['MRP'] != null) {
@@ -429,73 +438,67 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               ? (priceData['MRP'] as int).toDouble()
               : priceData['MRP'] as double;
         }
-        
+
         setState(() {
           _price = newPrice;
           _priceController.text = _price.toString();
-          
+
           _mrp = newMrp;
           _mrpController.text = _mrp.toString();
-          
-          _isLoadingPrice = false;
-                  _isPriceAvailable = true; // Set price as available
 
+          _isLoadingPrice = false;
+          _isPriceAvailable = true; // Set price as available
         });
-        
+
         // Always recalculate after price changes, outside of setState
         _calculateItemTotal();
-        
       } else {
-         setState(() {
-        _isLoadingPrice = false;
-        _isPriceAvailable = false;
-        _price = 0;
-        _priceController.text = '0.0';
-        _mrp = 0;
-        _mrpController.text = '0.0';
-      });
-        
-        // Recalculate with default prices
-        _calculateItemTotal();
-        
+        setState(() {
+          _isLoadingPrice = false;
+          _isPriceAvailable = false;
+          _price = 0;
+          _priceController.text = '0.0';
+          _mrp = 0;
+          _mrpController.text = '0.0';
+        });
+
         // Show message about using default price
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-             content: Text('Price not available for this item. Please select another item.'),
-          backgroundColor: Colors.red,
+            content: Text('Price not available for this item. Please select another item.'),
+            backgroundColor: Colors.red,
           ),
         );
         setState(() {
-        _selectedItem = null;
-        _selectedUnitOfMeasure = null;
-        _itemSearchController.clear();
-      });
+          _selectedItem = null;
+          _selectedUnitOfMeasure = null;
+          _itemSearchController.clear();
+        });
       }
     } catch (e) {
       if (!mounted) return; // Check again
-      
+
       debugPrint('Error fetching sales price: $e');
-      
+
       setState(() {
         _selectedItem = null;
-      _selectedUnitOfMeasure = null;
-      _itemSearchController.clear();
-      _isPriceAvailable = false;
+        _selectedUnitOfMeasure = null;
+        _itemSearchController.clear();
+        _isPriceAvailable = false;
       });
-      
+
       // Recalculate with default prices
       _calculateItemTotal();
-      
+
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Price fetch error. Using default: $e'),
+          content: Text('Price fetch error: $e'),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
-
   // Set default price when sales price API doesn't return valid data
   void _setDefaultPrice() {
     // If we have an MRP, use that
@@ -625,7 +628,8 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
 
               // Check if location is selected
               if (widget.locationCode == null || widget.locationCode!.isEmpty || 
-                widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty)
+                widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty &&
+                  !widget.isEditMode)
               Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -648,7 +652,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 ),
 
               if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
-                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty)
+                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty || widget.isEditMode)
               // Layout based on screen size
               widget.isSmallScreen
                     ? _buildSmallScreenLayout()
@@ -658,7 +662,8 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
 
               // Add Button
               if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
-                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty)
+                widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty  ||
+                  widget.isEditMode)
               Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton.icon(

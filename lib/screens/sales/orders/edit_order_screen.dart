@@ -30,6 +30,10 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   Map<String, dynamic>? _orderData;
   List<Map<String, dynamic>> _orderItems = [];
   List<Location> _locations = [];
+
+  List<Map<String, dynamic>> _originalItems = [];
+  List<int> _itemsToDelete = [];
+  List<Map<String, dynamic>> _itemsToAdd = [];
   
   // Controllers for editable fields
   final TextEditingController _orderDateController = TextEditingController();
@@ -66,49 +70,74 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         searchFilter: "No eq '${widget.orderNo}'",
         limit: 1,
       );
-      
+
       if (orderResponse is List && orderResponse.isNotEmpty) {
         _orderData = orderResponse[0];
-      } else if (orderResponse is Map<String, dynamic> && 
-                orderResponse.containsKey('value') && 
-                orderResponse['value'] is List &&
-                orderResponse['value'].isNotEmpty) {
+      } else if (orderResponse is Map<String, dynamic> &&
+          orderResponse.containsKey('value') &&
+          orderResponse['value'] is List &&
+          orderResponse['value'].isNotEmpty) {
         _orderData = orderResponse['value'][0];
       } else {
         throw Exception('Order not found');
       }
 
       debugPrint('Order loaded: $_orderData');
-      
+
+      // Check for Customer_Price_Group
+      if (_orderData!['Customer_Price_Group'] == null ||
+          (_orderData!['Customer_Price_Group'] as String).isEmpty) {
+
+        // If not found in order data, get it from the customer details
+        final customerNo = _orderData!['Sell_to_Customer_No'] as String?;
+        if (customerNo != null && customerNo.isNotEmpty) {
+          try {
+            final customerDetails = await _apiService.getCustomerDetails(customerNo);
+
+            // Extract the Customer_Price_Group
+            if (customerDetails.containsKey('Customer_Price_Group') &&
+                customerDetails['Customer_Price_Group'] != null) {
+
+              _orderData!['Customer_Price_Group'] = customerDetails['Customer_Price_Group'];
+              debugPrint('Customer_Price_Group from customer: ${_orderData!['Customer_Price_Group']}');
+            }
+          } catch (e) {
+            debugPrint('Error fetching customer details: $e');
+          }
+        }
+      } else {
+        debugPrint('Customer_Price_Group from order: ${_orderData!['Customer_Price_Group']}');
+      }
+
       // Fetch order lines
       final orderLines = await _apiService.getSalesOrderLines(widget.orderNo);
-      
+
       // Convert order lines to the format used by OrderItemsListWidget
-      _orderItems = orderLines.map((line) {
+      _originalItems = orderLines.map((line) {
         final itemNo = line['No'] as String? ?? '';
         final description = line['Description'] as String? ?? 'Unknown Item';
-        
+
         // Get quantity
-        final quantity = line['Quantity'] != null 
-            ? (line['Quantity'] is double ? line['Quantity'] : (line['Quantity'] as num).toDouble()) 
+        final quantity = line['Quantity'] != null
+            ? (line['Quantity'] is double ? line['Quantity'] : (line['Quantity'] as num).toDouble())
             : 0.0;
-            
+
         // Get price
-        final unitPrice = line['Unit_Price'] != null 
-            ? (line['Unit_Price'] is double ? line['Unit_Price'] : (line['Unit_Price'] as num).toDouble()) 
+        final unitPrice = line['Unit_Price'] != null
+            ? (line['Unit_Price'] is double ? line['Unit_Price'] : (line['Unit_Price'] as num).toDouble())
             : 0.0;
-            
+
         // Get total amount
-        final lineAmount = line['Line_Amount'] != null 
-            ? (line['Line_Amount'] is double ? line['Line_Amount'] : (line['Line_Amount'] as num).toDouble()) 
+        final lineAmount = line['Line_Amount'] != null
+            ? (line['Line_Amount'] is double ? line['Line_Amount'] : (line['Line_Amount'] as num).toDouble())
             : 0.0;
-            
+
         // Get unit of measure
         final unitOfMeasure = line['Unit_of_Measure_Code'] as String? ?? '';
-        
+
         // Store the original line number for reference
         final lineNo = line['Line_No'] as int? ?? 0;
-        
+
         return {
           'itemNo': itemNo,
           'itemDescription': description,
@@ -120,9 +149,16 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           'lineNo': lineNo, // Store the original line number
         };
       }).toList();
-      
+
+      // Initialize _orderItems with a copy of original items
+      _orderItems = List.from(_originalItems);
+
+      // Initialize tracking collections
+      _itemsToDelete = [];
+      _itemsToAdd = [];
+
       debugPrint('Order items loaded: ${_orderItems.length}');
-      
+
       // Fetch locations
       final authService = Provider.of<AuthService>(context, listen: false);
       if (authService.currentUser != null) {
@@ -132,10 +168,10 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           _locations = locationsData.map((json) => Location.fromJson(json)).toList();
         }
       }
-      
+
       // Initialize the form with order data
       _initializeFormData();
-      
+
       setState(() {
         _isLoading = false;
       });
@@ -147,6 +183,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       debugPrint('Error loading order details: $e');
     }
   }
+
 
   void _initializeFormData() {
     if (_orderData != null) {
@@ -363,6 +400,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             onAddItem: _addItem,
             locationCode: _orderData!['Location_Code'] as String? ?? '',
             customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
+            isEditMode: true,
           ),
           
           const SizedBox(height: 24),
@@ -411,22 +449,49 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       ),
     );
   }
-  
+
   void _addItem(Map<String, dynamic> item) {
+    // Only add to the _itemsToAdd list if it's truly a new item (no lineNo)
+    if (!item.containsKey('lineNo') || item['lineNo'] == null || item['lineNo'] <= 0) {
+      _itemsToAdd.add(item);
+    }
+
     setState(() {
       _orderItems.add(item);
     });
-    
+
     // Show success snackbar
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Item added to order')),
     );
   }
-  
+
   void _removeItem(int index) {
+    final item = _orderItems[index];
+
+    // If the item has a line number (existing item), add to delete list
+    if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
+      _itemsToDelete.add(item['lineNo']);
+    }
+
     setState(() {
       _orderItems.removeAt(index);
     });
+  }
+
+  // Add special version of addItem method for edit screen
+  void _addItemToOrder(Map<String, dynamic> item) {
+    // New items don't have line numbers
+    _itemsToAdd.add(item);
+
+    setState(() {
+      _orderItems.add(item);
+    });
+
+    // Show success snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Item added to order')),
+    );
   }
   
   void _clearAllItems() {
@@ -478,57 +543,58 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       );
       return;
     }
-    
+
     setState(() {
       _isSubmitting = true;
       _submissionStatus = 'Preparing to update order...';
     });
-    
+
     try {
       // 1. First, reopen the order if it's not already open
       if (_orderData!['Status'] != 'Open') {
         _updateSubmissionStatus('Reopening order for editing...');
         await _apiService.reopenSalesOrder(widget.orderNo);
       }
-      
-      // 2. Delete all existing order lines
-      _updateSubmissionStatus('Removing existing items...');
-      
-      // Get all existing line numbers
-      List<int> lineNumbers = [];
-      for (var item in _orderItems) {
-        if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
-          lineNumbers.add(item['lineNo'] as int);
+
+      // 2. Delete items that need to be removed
+      if (_itemsToDelete.isNotEmpty) {
+        _updateSubmissionStatus('Removing items...');
+
+        // Sort in descending order to avoid index issues
+        _itemsToDelete.sort((a, b) => b.compareTo(a));
+
+        for (var lineNo in _itemsToDelete) {
+          await _apiService.deleteSalesOrderLine(widget.orderNo, lineNo);
         }
       }
-      
-      // Delete lines in reverse order to avoid issues
-      lineNumbers.sort((a, b) => b.compareTo(a)); // Sort descending
-      
-      for (var lineNo in lineNumbers) {
-        await _apiService.deleteSalesOrderLine(widget.orderNo, lineNo);
+
+      // 3. Add ONLY new items (not existing ones)
+      // First, get a list of items that don't have a line number (these are new)
+      List<Map<String, dynamic>> onlyNewItems = _orderItems.where((item) {
+        return !item.containsKey('lineNo') || item['lineNo'] == null || item['lineNo'] <= 0;
+      }).toList();
+
+      if (onlyNewItems.isNotEmpty) {
+        _updateSubmissionStatus('Adding new items...');
+
+        for (int i = 0; i < onlyNewItems.length; i++) {
+          final item = onlyNewItems[i];
+          _updateSubmissionStatus('Adding item ${i+1} of ${onlyNewItems.length}: ${item['itemDescription']}...');
+
+          // Convert quantity to integer as required by the API
+          final int quantity = item['quantity'].round();
+
+          await _apiService.addSalesOrderLine(
+            documentNo: widget.orderNo,
+            itemNo: item['itemNo'],
+            locationCode: _orderData!['Location_Code'] as String,
+            quantity: quantity,
+          );
+        }
       }
-      
-      // 3. Add all items as new lines
-      _updateSubmissionStatus('Adding updated items...');
-      
-      for (int i = 0; i < _orderItems.length; i++) {
-        final item = _orderItems[i];
-        _updateSubmissionStatus('Adding item ${i+1} of ${_orderItems.length}: ${item['itemDescription']}...');
-        
-        // Convert quantity to integer as required by the API
-        final int quantity = item['quantity'].round();
-        
-        await _apiService.addSalesOrderLine(
-          documentNo: widget.orderNo,
-          itemNo: item['itemNo'],
-          locationCode: _orderData!['Location_Code'] as String,
-          quantity: quantity,
-        );
-      }
-      
+
       _updateSubmissionStatus('Order updated successfully!');
-      
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -536,7 +602,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      
+
       // Return to orders screen
       if (mounted) {
         Navigator.of(context).pop();
@@ -546,7 +612,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         _isSubmitting = false;
         _submissionStatus = 'Error: $e';
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error updating order: $e'),
@@ -555,7 +621,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       );
     }
   }
-  
+
   void _updateSubmissionStatus(String status) {
     if (mounted) {
       setState(() {
