@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_service.dart';
-import '../../../models/sales_order.dart';
 import '../orders/create_order_screen.dart';
+import '../orders/orders_screen.dart';
+import '../profile/profile_screen.dart';
+import '../../login/login_screen.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,21 +22,21 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _recentOrders = [];
   String? _errorMessage;
 
-  // Summary metrics
-  final summaryMetrics = [
-    {'title': 'Total Orders', 'value': '0', 'icon': Icons.shopping_cart, 'color': Colors.blue},
-    {'title': 'Active Customers', 'value': '0', 'icon': Icons.people, 'color': Colors.green},
-    {'title': 'Revenue (MTD)', 'value': '₹0', 'icon': Icons.currency_rupee, 'color': Colors.orange},
-    {'title': 'Pending Orders', 'value': '0', 'icon': Icons.pending_actions, 'color': Colors.red},
-  ];
+  // Dashboard metrics
+  Map<String, int> _dashboardMetrics = {
+    'customers': 0,
+    'pendingApproval': 0,
+    'releasedOrders': 0,
+    'openOrders': 0,
+  };
 
   @override
   void initState() {
     super.initState();
-    _loadRecentOrders();
+    _loadDashboardData();
   }
 
-  Future<void> _loadRecentOrders() async {
+  Future<void> _loadDashboardData() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -52,64 +54,120 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Load recent orders for the current sales person
-      final orders = await _apiService.getRecentSalesOrders(
-        salesPersonName: salesPerson.code,
-        limit: 10,
-      );
+      // Load all data in parallel
+      await Future.wait([
+        _loadRecentOrders(salesPerson.name),
+        _loadDashboardMetrics(salesPerson.code, salesPerson.name),
+      ]);
 
       setState(() {
-        _recentOrders = orders;
         _isLoading = false;
-        
-        // Update summary metrics
-        _updateSummaryMetrics(orders);
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load orders: $e';
+        _errorMessage = 'Failed to load dashboard data: $e';
         _isLoading = false;
       });
     }
   }
 
-  void _updateSummaryMetrics(List<dynamic> orders) {
-    // Count total orders
-    summaryMetrics[0]['value'] = orders.length.toString();
-    
-    // Count pending orders
-    final pendingOrders = orders.where((order) => order['Status'] == 'Released').length;
-    summaryMetrics[3]['value'] = pendingOrders.toString();
-    
-    // Calculate total revenue (approximate)
-    double totalRevenue = 0;
-    for (var order in orders) {
-      if (order['Amt_to_Customer'] != null) {
-        totalRevenue += order['Amt_to_Customer'] is double
-            ? order['Amt_to_Customer']
-            : double.tryParse(order['Amt_to_Customer'].toString()) ?? 0;
-      }
+  Future<void> _loadRecentOrders(String salesPersonName) async {
+    try {
+      // Get orders from last 48 hours
+      final now = DateTime.now();
+      final twoDaysAgo = now.subtract(const Duration(hours: 48));
+      
+      final orders = await _apiService.getSalesOrders(
+        salesPersonName: salesPersonName,
+        fromDate: twoDaysAgo,
+        toDate: now,
+        limit: 10,
+      );
+      
+      _recentOrders = orders;
+    } catch (e) {
+      print('Error loading recent orders: $e');
+      _recentOrders = [];
     }
-    
-    // Format revenue in thousands/lakhs
-    final formattedRevenue = _formatCurrency(totalRevenue);
-    summaryMetrics[2]['value'] = formattedRevenue;
-    
-    // Count unique customers
-    final uniqueCustomers = orders
-        .map((order) => order['Sell_to_Customer_No'])
-        .toSet()
-        .length;
-    summaryMetrics[1]['value'] = uniqueCustomers.toString();
   }
 
-  String _formatCurrency(double amount) {
-    if (amount >= 100000) {
-      return '₹${(amount / 100000).toStringAsFixed(1)}L';
-    } else if (amount >= 1000) {
-      return '₹${(amount / 1000).toStringAsFixed(1)}K';
-    } else {
-      return '₹${amount.toStringAsFixed(0)}';
+  Future<void> _loadDashboardMetrics(String salesPersonCode, String salesPersonName) async {
+    try {
+      // Load customers count - use a safer approach with error handling
+      int customersCount = 0;
+      try {
+        final customersResult = await _apiService.getCustomersWithPagination(
+          salesPersonCode: salesPersonCode,
+          page: 1,
+          pageSize: 1, // We only need the count
+        );
+        customersCount = customersResult.totalCount;
+      } catch (e) {
+        print('Error loading customers count: $e');
+        // Try alternative approach or set to 0
+        customersCount = 0;
+      }
+      
+      // Load order counts by status with individual error handling
+      int pendingCount = 0;
+      int releasedCount = 0;
+      int openCount = 0;
+      
+      try {
+        final pendingResponse = await _apiService.getSalesOrders(
+          salesPersonName: salesPersonName,
+          status: 'Pending Approval',
+          limit: 1,
+          includeCount: true,
+        );
+        pendingCount = pendingResponse['@odata.count'] ?? 0;
+      } catch (e) {
+        print('Error loading pending orders count: $e');
+      }
+      
+      try {
+        final releasedResponse = await _apiService.getSalesOrders(
+          salesPersonName: salesPersonName,
+          status: 'Released',
+          limit: 1,
+          includeCount: true,
+        );
+        releasedCount = releasedResponse['@odata.count'] ?? 0;
+      } catch (e) {
+        print('Error loading released orders count: $e');
+      }
+      
+      try {
+        final openResponse = await _apiService.getSalesOrders(
+          salesPersonName: salesPersonName,
+          status: 'Open',
+          limit: 1,
+          includeCount: true,
+        );
+        openCount = openResponse['@odata.count'] ?? 0;
+      } catch (e) {
+        print('Error loading open orders count: $e');
+      }
+
+      setState(() {
+        _dashboardMetrics = {
+          'customers': customersCount,
+          'pendingApproval': pendingCount,
+          'releasedOrders': releasedCount,
+          'openOrders': openCount,
+        };
+      });
+    } catch (e) {
+      print('Error loading dashboard metrics: $e');
+      // Set all to 0 if there's a general error
+      setState(() {
+        _dashboardMetrics = {
+          'customers': 0,
+          'pendingApproval': 0,
+          'releasedOrders': 0,
+          'openOrders': 0,
+        };
+      });
     }
   }
 
@@ -121,19 +179,73 @@ class _HomeScreenState extends State<HomeScreen> {
     final salesPerson = authService.currentUser;
 
     return Scaffold(
-      appBar: CommonAppBar(
-        title: 'Sampoorna Feeds',
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/logo.png',
+              height: 30,
+              width: 30,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Sampoorna Feeds',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF2C5F2D),
         actions: [
-          // Add a user icon with the sales person's name
+          // Profile Avatar Dropdown
           if (salesPerson != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Center(
-                child: Text(
-                  salesPerson.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'profile') {
+                  // Navigate to profile screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
+                } else if (value == 'logout') {
+                  _showLogoutDialog(context, authService);
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<String>(
+                  value: 'profile',
+                  child: ListTile(
+                    leading: const Icon(Icons.person),
+                    title: const Text('Profile'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'logout',
+                  child: ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Logout'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  radius: 18,
+                  child: Text(
+                    salesPerson.name.isNotEmpty 
+                        ? salesPerson.name[0].toUpperCase()
+                        : 'S',
+                    style: const TextStyle(
+                      color: Color(0xFF2C5F2D),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
@@ -146,66 +258,60 @@ class _HomeScreenState extends State<HomeScreen> {
             context,
             MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
           ).then((_) {
-            // Refresh orders when returning from create screen
-            _loadRecentOrders();
+            _loadDashboardData();
           });
         },
         backgroundColor: const Color(0xFF008000),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadRecentOrders,
+        onRefresh: _loadDashboardData,
         child: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _errorMessage != null
-                  ? Center(child: Text(_errorMessage!))
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(_errorMessage!),
+                          ElevatedButton(
+                            onPressed: _loadDashboardData,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
                   : SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Welcome message with sales person's name
+                          // Welcome message
                           if (salesPerson != null)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
+                              padding: const EdgeInsets.only(bottom: 24.0),
                               child: Text(
-                                'Welcome, ${salesPerson.name}',
+                                'Welcome back, ${salesPerson.name}',
                                 style: const TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
 
-                          // Summary Cards - Horizontally scrollable
-                          SizedBox(
-                            height: 120,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: summaryMetrics.length,
-                              itemBuilder: (context, index) {
-                                final metric = summaryMetrics[index];
-                                return _buildSummaryCard(
-                                  title: metric['title'] as String,
-                                  value: metric['value'] as String,
-                                  icon: metric['icon'] as IconData,
-                                  color: metric['color'] as Color,
-                                );
-                              },
-                            ),
-                          ),
+                          // Dashboard Cards
+                          _buildDashboardCards(),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 32),
 
-                          // Recent Orders section with Create Order button
+                          // Recent Orders section
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                'Recent Orders',
+                                'Recent Orders (48h)',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
@@ -217,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     context,
                                     MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
                                   ).then((_) {
-                                    _loadRecentOrders();
+                                    _loadDashboardData();
                                   });
                                 },
                                 icon: const Icon(Icons.add, size: 18),
@@ -225,9 +331,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF008000),
                                   foregroundColor: Colors.white,
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: isSmallScreen ? 12 : 16,
-                                      vertical: isSmallScreen ? 8 : 12
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
                                   ),
                                 ),
                               ),
@@ -238,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           // Orders list or empty state
                           _recentOrders.isEmpty
                               ? _buildEmptyOrdersState()
-                              : _buildOrdersList(isSmallScreen),
+                              : _buildOrdersList(),
                         ],
                       ),
                     ),
@@ -247,9 +353,207 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showLogoutDialog(BuildContext context, AuthService authService) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                authService.logout();
+                // Navigate to login screen
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF008000),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDashboardCards() {
+    return Column(
+      children: [
+        // Customers Card
+        _buildDashboardCard(
+          title: 'My Customers',
+          count: _dashboardMetrics['customers']!,
+          icon: Icons.people,
+          color: Colors.blue,
+          onTap: () {
+            // TODO: Navigate to customers screen when implemented
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Customers screen coming soon')),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        
+        // Orders Row
+        Row(
+          children: [
+            Expanded(
+              child: _buildDashboardCard(
+                title: 'Pending Approval',
+                count: _dashboardMetrics['pendingApproval']!,
+                icon: Icons.pending_actions,
+                color: Colors.orange,
+                onTap: () => _navigateToOrdersByStatus('Pending Approval'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDashboardCard(
+                title: 'Released Orders',
+                count: _dashboardMetrics['releasedOrders']!,
+                icon: Icons.check_circle,
+                color: Colors.green,
+                onTap: () => _navigateToOrdersByStatus('Released Orders'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        
+        // Open Orders Card
+        _buildDashboardCard(
+          title: 'Open Orders',
+          count: _dashboardMetrics['openOrders']!,
+          icon: Icons.receipt,
+          color: Colors.purple,
+          onTap: () => _navigateToOrdersByStatus('Open Orders'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDashboardCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        count.toString(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.grey.shade400,
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToOrdersByStatus(String status) {
+    // Map status to correct filter values for orders screen
+    String? filterStatus;
+    switch (status) {
+      case 'Open Orders':
+        filterStatus = 'Open';
+        break;
+      case 'Released Orders':
+        filterStatus = 'Approved'; // Maps to "Approved" tab in orders screen
+        break;
+      case 'Pending Approval':
+        filterStatus = 'Pending Approval';
+        break;
+      default:
+        filterStatus = status;
+    }
+    
+    // Navigate to orders screen with specific status filter
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const OrdersScreen(),
+        settings: RouteSettings(arguments: {'initialStatus': filterStatus}),
+      ),
+    );
+  }
+
   Widget _buildEmptyOrdersState() {
-    return SizedBox(
+    return Container(
       height: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -265,11 +569,12 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(
                 color: Colors.grey.shade700,
                 fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Create a new order by clicking the + button',
+              'Orders from the last 48 hours will appear here',
               style: TextStyle(
                 color: Colors.grey.shade500,
                 fontSize: 14,
@@ -281,19 +586,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildOrdersList(bool isSmallScreen) {
+  Widget _buildOrdersList() {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _recentOrders.length,
       itemBuilder: (context, index) {
         final order = _recentOrders[index];
-        return _buildOrderCard(order, isSmallScreen);
+        return _buildOrderCard(order);
       },
     );
   }
 
-  Widget _buildOrderCard(dynamic order, bool isSmallScreen) {
+  Widget _buildOrderCard(dynamic order) {
     final String orderId = order['No'] ?? '';
     final String customerName = order['Sell_to_Customer_Name'] ?? '';
     final String orderDate = order['Order_Date'] != null 
@@ -308,9 +613,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -321,30 +626,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   orderId,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                    fontSize: 16,
                   ),
                 ),
                 _buildStatusChip(status),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Customer',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         customerName,
-                        style: const TextStyle(fontSize: 14),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -354,70 +663,63 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Date',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         orderDate,
-                        style: const TextStyle(fontSize: 14),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text(
-                        'Amount',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Amount',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
                       ),
-                      Text(
-                        '₹${amount.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${amount.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.visibility, size: 20),
+                TextButton.icon(
                   onPressed: () {
-                    // View order details
                     _showOrderDetails(order);
                   },
-                  tooltip: 'View Details',
-                  color: Colors.blue,
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(8),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
-                  onPressed: () {
-                    // Edit order - Not implemented yet
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Edit functionality coming soon')),
-                    );
-                  },
-                  tooltip: 'Edit Order',
-                  color: Colors.orange,
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(8),
+                  icon: const Icon(Icons.visibility, size: 18),
+                  label: const Text('View Details'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                  ),
                 ),
               ],
             ),
@@ -427,13 +729,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildStatusChip(String status) {
+    Color chipColor;
+
+    switch (status) {
+      case 'Completed':
+        chipColor = Colors.green;
+        break;
+      case 'Released':
+        chipColor = Colors.blue;
+        break;
+      case 'Pending Approval':
+        chipColor = Colors.orange;
+        break;
+      case 'Open':
+        chipColor = Colors.purple;
+        break;
+      default:
+        chipColor = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: chipColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: chipColor, width: 1),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: chipColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
   void _showOrderDetails(dynamic order) {
-    // Show a modal bottom sheet with order details
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         return DraggableScrollableSheet(
@@ -445,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return SingleChildScrollView(
               controller: scrollController,
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -456,7 +795,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           'Order ${order['No']}',
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -467,9 +806,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     
+                    const SizedBox(height: 16),
+                    
                     // Status chip
                     Center(child: _buildStatusChip(order['Status'] ?? '')),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     
                     // Order details
                     _buildOrderDetailItem('Customer', order['Sell_to_Customer_Name'] ?? ''),
@@ -479,40 +820,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildOrderDetailItem('Amount', '₹${order['Amt_to_Customer']?.toString() ?? '0'}'),
                     _buildOrderDetailItem('Location', order['Location_Code'] ?? ''),
                     
-                    const Divider(height: 32),
+                    const SizedBox(height: 24),
                     
                     // Action buttons
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            // Functionality to be implemented
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Print functionality coming soon')),
-                            );
-                          },
-                          icon: const Icon(Icons.print, size: 18),
-                          label: const Text('Print'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            // Functionality to be implemented
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Edit functionality coming soon')),
-                            );
-                          },
-                          icon: const Icon(Icons.edit, size: 18),
-                          label: const Text('Edit'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const OrdersScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.list, size: 18),
+                            label: const Text('View All Orders'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF008000),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
                           ),
                         ),
                       ],
@@ -529,7 +859,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildOrderDetailItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -538,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               '$label:',
               style: TextStyle(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w500,
                 color: Colors.grey.shade700,
               ),
             ),
@@ -548,6 +878,7 @@ class _HomeScreenState extends State<HomeScreen> {
               value,
               style: const TextStyle(
                 fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -555,106 +886,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _buildStatusChip(String status) {
-    Color chipColor;
-
-    switch (status) {
-      case 'Completed':
-        chipColor = Colors.green;
-        break;
-      case 'Released':
-        chipColor = Colors.blue;
-        break;
-      case 'Pending':
-        chipColor = Colors.orange;
-        break;
-      default:
-        chipColor = Colors.grey;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: chipColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: chipColor, width: 1),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: chipColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      width: 200,
-      margin: const EdgeInsets.only(right: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+} 

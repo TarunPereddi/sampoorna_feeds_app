@@ -53,8 +53,26 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     super.initState();
     _searchController.text = _searchQuery;
     
-    // Initialize tab controller with tabs
+    // Initialize tab controller with tabs first
     _tabController = TabController(length: _statusTabs.length, vsync: this);
+    
+    // Check for initial status from route arguments
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final initialStatus = args?['initialStatus'] as String?;
+      
+      if (initialStatus != null) {
+        final statusIndex = _statusTabs.indexWhere((tab) => tab == initialStatus);
+        if (statusIndex != -1) {
+          setState(() {
+            _selectedStatus = initialStatus;
+          });
+          _tabController.animateTo(statusIndex);
+          // Reload orders after setting the status
+          _loadOrders();
+        }
+      }
+    });
     
     // Add listener to tab controller to reload data when tab changes
     _tabController.addListener(_onTabChanged);
@@ -62,7 +80,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     // Initial load of orders
     _loadOrders();
   }
-
   @override
   void dispose() {
     _searchController.dispose();
