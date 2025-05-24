@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/common_app_bar.dart';
 
@@ -12,16 +13,30 @@ class CustomerDetailScreen extends StatefulWidget {
   State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
 }
 
-class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
+class _CustomerDetailScreenState extends State<CustomerDetailScreen> with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   Map<String, dynamic> _customerDetails = {};
   String? _errorMessage;
-
+  late TabController _tabController;
+  
+  // Indian Rupee currency formatter
+  final _currencyFormat = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadCustomerDetails();
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCustomerDetails() async {
@@ -81,6 +96,24 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
   }
 
+  Future<void> _openMaps(String address) async {
+    if (address.isEmpty) {
+      // Silently return if address is empty
+      return;
+    }
+    
+    final Uri mapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}');
+    try {
+      if (await canLaunchUrl(mapsUri)) {
+        await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint('Could not open maps application');
+      }
+    } catch (e) {
+      // Log error but don't show snackbar
+      debugPrint('Error opening maps: $e');
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,207 +129,340 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Error loading data',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.red.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
+              ? _buildErrorWidget()
+              : Stack(
+                  children: [
+                    _buildCustomerDetailsContent(),
+                    
+                    // Floating action buttons for all tabs
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FloatingActionButton.extended(
+                            heroTag: 'generateInvoice',
+                            onPressed: () {
+                              // Invoice generation logic will be implemented here
+                            },
+                            backgroundColor: const Color(0xFF2C5F2D),
+                            foregroundColor: Colors.white,
+                            icon: const Icon(Icons.receipt_long),
+                            label: const Text('Generate Invoice'),
+                          ),
+                          const SizedBox(height: 12),
+                          FloatingActionButton.extended(
+                            heroTag: 'generateReport',
+                            onPressed: () {
+                              // Report generation logic will be implemented here
+                            },
+                            backgroundColor: const Color(0xFF2C5F2D),
+                            foregroundColor: Colors.white,
+                            icon: const Icon(Icons.summarize),
+                            label: const Text('Generate Report'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text(_errorMessage!),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadCustomerDetails,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Customer Card with basic info
-                      _buildCustomerInfoCard(),
-                      const SizedBox(height: 16),
-
-                      // Contact Card
-                      _buildContactCard(),
-                      const SizedBox(height: 16),
-
-                      // Address Card
-                      _buildAddressCard(),
-                      const SizedBox(height: 16),
-
-                      // Financial Info Card
-                      _buildFinancialInfoCard(),
-                      const SizedBox(height: 16),
-                      
-                      // Report Buttons
-                      _buildReportButtons(),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
     );
   }
 
-  Widget _buildCustomerInfoCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Error loading data',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.red.shade700,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Text(_errorMessage!),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadCustomerDetails,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomerDetailsContent() {
+    return Column(
+      children: [
+        // Header with customer name and balance info
+        _buildCustomerHeader(),
+        
+        // TabBar for organizing content
+        TabBar(
+          controller: _tabController,
+          labelColor: const Color(0xFF2C5F2D),
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: const Color(0xFF2C5F2D),
+          tabs: const [
+            Tab(icon: Icon(Icons.info), text: "Info"),
+            Tab(icon: Icon(Icons.location_on), text: "Address"),
+            Tab(icon: Icon(Icons.receipt_long), text: "Finance"),
+          ],
+        ),
+        
+        // TabBarView with content
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Info Tab
+              _buildInfoTab(),
+              
+              // Address Tab
+              _buildAddressTab(),
+              
+              // Finance Tab
+              _buildFinanceTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomerHeader() {
+    // Format currency values for display
+    final netChange = _customerDetails['Net_Change'] ?? 0.0;
+    final formattedNetChange = _currencyFormat.format(netChange);
+    
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C5F2D).withOpacity(0.9),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: Colors.white,
+            child: Text(
+              (_customerDetails['Name'] ?? 'NA').toString().isNotEmpty 
+                  ? (_customerDetails['Name'] ?? 'NA').toString()[0].toUpperCase()
+                  : 'NA',
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2C5F2D),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          
+          // Customer details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
-                  backgroundColor: Color(0xFF2C5F2D),
-                  foregroundColor: Colors.white,
-                  child: Icon(Icons.person),
+                Text(
+                  _customerDetails['Name'] ?? 'N/A',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _customerDetails['Name'] ?? 'N/A',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Customer No: ${_customerDetails['No'] ?? 'N/A'}',
-                        style: TextStyle(color: Colors.grey.shade700),
-                      ),
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  'ID: ${_customerDetails['No'] ?? 'N/A'}',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          
+          // Balance indicator
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                'Balance',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                formattedNetChange,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: netChange >= 0 ? Colors.white : Colors.red.shade200,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildContactCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Contact Information',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: () {
-                if (_customerDetails['Phone_No'] != null && _customerDetails['Phone_No'].toString().isNotEmpty) {
-                  _makePhoneCall(_customerDetails['Phone_No']);
-                }
-              },
-              child: Row(
+  Widget _buildInfoTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Quick Contact Chips
+          Wrap(
+            spacing: 8,
+            children: [
+              if (_customerDetails['Phone_No'] != null && _customerDetails['Phone_No'].toString().isNotEmpty)
+                ActionChip(
+                  avatar: const Icon(Icons.call, color: Color(0xFF2C5F2D), size: 18),
+                  label: const Text('Call'),
+                  onPressed: () => _makePhoneCall(_customerDetails['Phone_No']),
+                ),
+              if (_customerDetails['E_Mail'] != null && _customerDetails['E_Mail'].toString().trim().isNotEmpty)
+                ActionChip(
+                  avatar: const Icon(Icons.email, color: Color(0xFF2C5F2D), size: 18),
+                  label: const Text('Email'),
+                  onPressed: () => _sendEmail(_customerDetails['E_Mail']),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Contact Info Card
+          Card(
+            elevation: 1,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.phone, color: Color(0xFF2C5F2D)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Phone Number',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        Text(
-                          _customerDetails['Phone_No'] ?? 'Not Available',
-                          style: const TextStyle(
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+                  const Text(
+                    'Contact Information',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (_customerDetails['Phone_No'] != null && _customerDetails['Phone_No'].toString().isNotEmpty)
-                    const Icon(
-                      Icons.call,
-                      color: Color(0xFF2C5F2D),
-                      size: 20,
-                    ),
-                ],
-              ),
-            ),            const SizedBox(height: 16),
-            InkWell(              onTap: () {
-                final email = _customerDetails['E_Mail'];
-                if (email != null && email.toString().trim().isNotEmpty) {
-                  _sendEmail(email.toString());
-                }
-              },
-              child: Row(
-                children: [
-                  const Icon(Icons.email, color: Color(0xFF2C5F2D)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [                        const Text(
-                          'Email',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        Text(
-                          _customerDetails['E_Mail'] != null && 
-                          _customerDetails['E_Mail'].toString().trim().isNotEmpty 
-                              ? _customerDetails['E_Mail'] 
-                              : 'Not Available',
-                          style: const TextStyle(
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),                  if (_customerDetails['E_Mail'] != null && _customerDetails['E_Mail'].toString().trim().isNotEmpty)
-                    const Icon(
-                      Icons.send,
-                      color: Color(0xFF2C5F2D),
-                      size: 20,
-                    ),
+                  const Divider(),
+                  
+                  // Phone
+                  _buildInfoRow(
+                    Icons.phone,
+                    'Phone',
+                    _customerDetails['Phone_No'] ?? 'Not Available',
+                  ),
+                  
+                  // Email
+                  _buildInfoRow(
+                    Icons.email,
+                    'Email',
+                    _customerDetails['E_Mail'] != null && 
+                    _customerDetails['E_Mail'].toString().trim().isNotEmpty 
+                        ? _customerDetails['E_Mail'] 
+                        : 'Not Available',
+                  ),
+                  
+                  // Additional fields can be added here if needed
                 ],
               ),
             ),
+          ),
+          
+          // Customer Category/Group details can be added here if available
+          if (_customerDetails['Customer_Group_Code'] != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              elevation: 1,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Additional Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Divider(),
+                    
+                    // Customer Group
+                    _buildInfoRow(
+                      Icons.category,
+                      'Customer Group',
+                      _customerDetails['Customer_Group_Code'] ?? 'Not Available',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
-        ),
+          
+          // Add bottom padding to ensure floating action buttons don't overlap
+          const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF2C5F2D).withOpacity(0.7)),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 15),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildAddressCard() {
+  Widget _buildAddressTab() {
     // Extract address components
     final stateCode = _customerDetails['State_Code'] ?? '';
     final address = _customerDetails['Address'] ?? '';
@@ -306,150 +472,210 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final county = _customerDetails['County'] ?? '';
     final postCode = _customerDetails['Post_Code'] ?? '';
     
-    // Build full address
-    final fullAddress = [
-      address,
-      address2,
-      city,
-      county,
-      '$stateCode $postCode',
-      country,
-    ].where((element) => element.isNotEmpty).join(', ');
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Address',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.location_on, color: Color(0xFF2C5F2D)),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    fullAddress.isEmpty ? 'No address available' : fullAddress,
-                    style: const TextStyle(
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFinancialInfoCard() {
-    // Format currency values
-    final netChange = _customerDetails['Net_Change'] ?? 0.0;
-    final creditLimit = _customerDetails['Credit_Limit_LCY'] ?? 0.0;
+    final addressLines = [
+      if (address.isNotEmpty) address,
+      if (address2.isNotEmpty) address2,
+      if (city.isNotEmpty) city,
+      if (county.isNotEmpty) county,
+      if (stateCode.isNotEmpty || postCode.isNotEmpty) '$stateCode $postCode'.trim(),
+      if (country.isNotEmpty) country,
+    ];
     
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Financial Information',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+    // Full address for maps
+    final fullAddress = addressLines.join(', ');
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Address Card
+          Card(
+            elevation: 1,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Color(0xFF2C5F2D)),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      // Action button for directions - opens maps
+                      IconButton(
+                        icon: const Icon(Icons.directions, color: Color(0xFF2C5F2D)),
+                        onPressed: () => _openMaps(fullAddress),
+                        tooltip: 'Get directions',
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  if (addressLines.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      child: Text('No address information available'),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: addressLines.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Text(
+                            addressLines[index],
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: index == 0 
+                                  ? Colors.black 
+                                  : Colors.black.withOpacity(0.7),
+                              fontWeight: index == 0 
+                                  ? FontWeight.bold 
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            _buildFinancialInfoRow(
-              'Balance',
-              '$netChange',
-              netChange < 0 ? Colors.red : Colors.green,
-            ),
-            const Divider(),
-            _buildFinancialInfoRow(
-              'Credit Limit',
-              '$creditLimit',
-              Colors.black,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFinancialInfoRow(String label, String value, Color valueColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-            ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: valueColor,
-            ),
-          ),
+          
+          // Add bottom padding to ensure floating action buttons don't overlap
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
-  Widget _buildReportButtons() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ElevatedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Invoice Report functionality coming soon')),
-            );
-          },
-          icon: const Icon(Icons.receipt_long),
-          label: const Text('Invoice Report'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2C5F2D),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+  Widget _buildFinanceTab() {
+    // Format currency values
+    final netChange = _customerDetails['Net_Change'] ?? 0.0;
+    final creditLimit = _customerDetails['Credit_Limit_LCY'] ?? 0.0;
+    final formattedNetChange = _currencyFormat.format(netChange);
+    final formattedCreditLimit = _currencyFormat.format(creditLimit);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Financial Summary Card
+          Card(
+            elevation: 1,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Financial Summary',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Balance
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Current Balance',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      Text(
+                        formattedNetChange,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: netChange < 0 ? Colors.red : Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const Divider(height: 24),
+                  
+                  // Credit Limit
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Credit Limit',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      Text(
+                        formattedCreditLimit,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        ElevatedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Statement Report functionality coming soon')),
-            );
-          },
-          icon: const Icon(Icons.summarize),
-          label: const Text('Statement Report'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2C5F2D),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+          
+          const SizedBox(height: 16),
+          
+          // Transaction History Card (can be added in future)
+          Card(
+            elevation: 1,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Recent Transactions',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Center(
+                    heightFactor: 2.0,
+                    child: Text(
+                      'Transaction history will appear here',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ],
+          
+          // Add padding at the bottom to accommodate the floating action buttons
+          const SizedBox(height: 100),
+        ],
+      ),
     );
   }
 }
