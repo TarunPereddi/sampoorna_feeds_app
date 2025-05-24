@@ -49,5 +49,7 @@
 		<false/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>This app needs access to save PDF files</string>
 	</dict>
 </plist>

@@ -672,4 +672,53 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
   // Get vendor details method removed as not needed
 
   // Generic POST method for API calls
+
+  // Get invoice report for a customer
+  Future<String?> getInvoiceReport({
+    required String customerNo,
+    required DateTime fromDate,
+    required DateTime toDate,
+  }) async {
+    try {
+      final body = {
+        "custNo": customerNo,
+        "fromDate": DateFormat('yyyy-MM-dd').format(fromDate),
+        "toDate": DateFormat('yyyy-MM-dd').format(toDate),
+      };
+      
+      final response = await post('API_GetInvoiceReport', body: body);
+      
+      if (response != null && response['value'] != null) {
+        final value = response['value'] as String;
+        return value.isNotEmpty ? value : null;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get invoice report: $e');
+    }
+  }
+
+  Future<String?> getCustomerStatementReport({
+    required String customerNo,
+    required DateTime fromDate,
+    required DateTime toDate,
+  }) async {
+    try {
+      final body = {
+        "custNo": customerNo,
+        "fromDate": DateFormat('yyyy-MM-dd').format(fromDate),
+        "toDate": DateFormat('yyyy-MM-dd').format(toDate),
+      };
+      
+      final response = await post('API_GetCustStatementReport', body: body);
+      
+      if (response != null && response['value'] != null) {
+        final value = response['value'] as String;
+        return value.isNotEmpty ? value : null;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get customer statement report: $e');
+    }
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../../services/api_service.dart';
+import '../../../services/pdf_service.dart';
 import '../../../widgets/common_app_bar.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
@@ -75,7 +76,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       );
     }
   }
-
   Future<void> _sendEmail(String email) async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
@@ -83,7 +83,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     );
     try {
       if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri);
+        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not launch email to $email')),
@@ -140,11 +140,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       right: 16,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FloatingActionButton.extended(
+                        children: [                          FloatingActionButton.extended(
                             heroTag: 'generateInvoice',
                             onPressed: () {
-                              // Invoice generation logic will be implemented here
+                              _showDateRangeDialog(context, 'invoice');
                             },
                             backgroundColor: const Color(0xFF2C5F2D),
                             foregroundColor: Colors.white,
@@ -155,7 +154,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                           FloatingActionButton.extended(
                             heroTag: 'generateReport',
                             onPressed: () {
-                              // Report generation logic will be implemented here
+                              _showDateRangeDialog(context, 'statement');
                             },
                             backgroundColor: const Color(0xFF2C5F2D),
                             foregroundColor: Colors.white,
@@ -677,5 +676,244 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         ],
       ),
     );
+  }
+
+  void _showDateRangeDialog(BuildContext context, String reportType) {
+    DateTime? fromDate;
+    DateTime? toDate;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(
+                    reportType == 'invoice' ? Icons.receipt_long : Icons.summarize,
+                    color: const Color(0xFF2C5F2D),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // From Date Picker
+                  InkWell(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: fromDate ?? DateTime.now().subtract(const Duration(days: 30)),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          fromDate = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(fromDate != null 
+                            ? DateFormat('dd/MM/yyyy').format(fromDate!)
+                            : 'From Date'),
+                          const Icon(Icons.calendar_today),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // To Date Picker
+                  InkWell(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: toDate ?? DateTime.now(),
+                        firstDate: fromDate ?? DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          toDate = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(toDate != null 
+                            ? DateFormat('dd/MM/yyyy').format(toDate!)
+                            : 'To Date'),
+                          const Icon(Icons.calendar_today),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: (fromDate != null && toDate != null)
+                      ? () {
+                          Navigator.pop(dialogContext);
+                          _generateReport(reportType, fromDate!, toDate!);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C5F2D),
+                  ),
+                  child: const Text('Generate'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _generateReport(String reportType, DateTime fromDate, DateTime toDate) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Generating PDF...'),
+            ],
+          ),
+        );
+      },
+    );
+      try {
+      String? base64String;
+      String fileName;
+      
+      // Create a variable to track if the dialog is showing
+      bool isDialogShowing = true;
+      
+      if (reportType == 'invoice') {
+        base64String = await _apiService.getInvoiceReport(
+          customerNo: widget.customerNo,
+          fromDate: fromDate,
+          toDate: toDate,
+        );
+        fileName = 'Invoice_${widget.customerNo}_${DateFormat('yyyyMMdd').format(fromDate)}_${DateFormat('yyyyMMdd').format(toDate)}.pdf';
+      } else {
+        base64String = await _apiService.getCustomerStatementReport(
+          customerNo: widget.customerNo,
+          fromDate: fromDate,
+          toDate: toDate,
+        );
+        fileName = 'Statement_${widget.customerNo}_${DateFormat('yyyyMMdd').format(fromDate)}_${DateFormat('yyyyMMdd').format(toDate)}.pdf';
+      }
+      
+      // Close loading dialog if it's still showing
+      if (isDialogShowing && Navigator.canPop(context)) {
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogShowing = false;
+      }
+      
+      if (base64String == null || base64String.isEmpty) {
+        // Show no data dialog
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('No Data'),
+              content: Text('No ${reportType} data exists for the selected date range.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      }
+        // Generate and share PDF
+      bool success = await PdfService.generateAndSharePdf(
+        base64String: base64String,
+        fileName: fileName,
+        context: context,
+      );
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${reportType == 'invoice' ? 'Invoice' : 'Statement'} generated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Show error if PDF couldn't be generated
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to generate ${reportType}. Invalid data received.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+        } catch (e) {
+      // Close loading dialog if still open
+      if (Navigator.canPop(context)) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to generate ${reportType}: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 }
