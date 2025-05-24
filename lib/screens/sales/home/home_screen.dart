@@ -1,13 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../widgets/common_app_bar.dart';
-import '../../../services/auth_service.dart';
-import '../../../services/api_service.dart';
-import '../orders/create_order_screen.dart';
-import '../orders/orders_screen.dart';
-import '../profile/profile_screen.dart';
-import '../../login/login_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../../models/sales_person.dart';
+import '../../../screens/login/login_screen.dart';
+import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/navigation_service.dart';
+import '../orders/create_order_screen.dart';
+import '../profile/profile_screen.dart';
+import '../sales_shell.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -171,10 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 600;
+  @override  Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final salesPerson = authService.currentUser;
 
@@ -202,14 +201,10 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           // Profile Avatar Dropdown
           if (salesPerson != null)
-            PopupMenuButton<String>(
-              onSelected: (value) {
+            PopupMenuButton<String>(              onSelected: (value) {
                 if (value == 'profile') {
-                  // Navigate to profile screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                  );
+                  // Navigate to profile tab using NavigationService
+                  NavigationService.navigateToTab(context, 4);
                 } else if (value == 'logout') {
                   _showLogoutDialog(context, authService);
                 }
@@ -251,9 +246,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
+      ),      floatingActionButton: FloatingActionButton(
         onPressed: () {
+          // Use regular Navigator.push here since CreateOrderScreen is not a tab
+          // and we want to return back to this screen afterwards
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
@@ -369,8 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                authService.logout();
+                Navigator.of(context).pop();                authService.logout();
                 // Navigate to login screen
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -388,65 +383,101 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-  }
-
-  Widget _buildDashboardCards() {
-    return Column(
-      children: [
-        // Customers Card
-        _buildDashboardCard(
-          title: 'My Customers',
-          count: _dashboardMetrics['customers']!,
-          icon: Icons.people,
-          color: Colors.blue,
-          onTap: () {
-            // TODO: Navigate to customers screen when implemented
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Customers screen coming soon')),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        
-        // Orders Row
-        Row(
-          children: [
-            Expanded(
-              child: _buildDashboardCard(
-                title: 'Pending Approval',
-                count: _dashboardMetrics['pendingApproval']!,
-                icon: Icons.pending_actions,
-                color: Colors.orange,
-                onTap: () => _navigateToOrdersByStatus('Pending Approval'),
+  }  Widget _buildDashboardCards() {
+    // Calculate how many cards per row based on screen width
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardsPerRow = screenWidth < 360 ? 2 : 4; // Either 2 or 4 cards per row
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Calculate the width for each card
+          final cardWidth = (constraints.maxWidth - ((cardsPerRow - 1) * 8)) / cardsPerRow;
+            return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              // Customers Card
+              SizedBox(
+                width: cardWidth,
+                child: _buildCompactDashboardCard(
+                  title: 'Customers',
+                  count: _dashboardMetrics['customers']!,
+                  icon: Icons.people,
+                  color: Colors.blue,
+                  onTap: () {
+                    // Navigate to the customers tab using NavigationService
+                    NavigationService.navigateToTab(context, 2);
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDashboardCard(
-                title: 'Released Orders',
-                count: _dashboardMetrics['releasedOrders']!,
-                icon: Icons.check_circle,
-                color: Colors.green,
-                onTap: () => _navigateToOrdersByStatus('Released Orders'),
+              
+              // Pending Approval Card
+              SizedBox(
+                width: cardWidth,
+                child: _buildCompactDashboardCard(
+                  title: 'Pending Orders',
+                  count: _dashboardMetrics['pendingApproval']!,
+                  icon: Icons.pending_actions,
+                  color: Colors.orange,
+                  onTap: () {
+                    // Navigate to the orders tab with filter using NavigationService
+                    NavigationService.navigateToTab(
+                      context, 
+                      1, 
+                      arguments: {'initialStatus': 'Pending Approval'}
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        
-        // Open Orders Card
-        _buildDashboardCard(
-          title: 'Open Orders',
-          count: _dashboardMetrics['openOrders']!,
-          icon: Icons.receipt,
-          color: Colors.purple,
-          onTap: () => _navigateToOrdersByStatus('Open Orders'),
-        ),
-      ],
+              
+              // Released Orders Card
+              SizedBox(
+                width: cardWidth,
+                child: _buildCompactDashboardCard(
+                  title: 'Released Orders',
+                  count: _dashboardMetrics['releasedOrders']!,
+                  icon: Icons.check_circle,
+                  color: Colors.green,
+                  onTap: () {
+                    // Navigate to the orders tab with filter using NavigationService
+                    NavigationService.navigateToTab(
+                      context, 
+                      1, 
+                      arguments: {'initialStatus': 'Approved'}
+                    );
+                  },
+                ),
+              ),
+                // Open Orders Card
+              SizedBox(
+                width: cardWidth,
+                child: _buildCompactDashboardCard(
+                  title: 'Open Orders',
+                  count: _dashboardMetrics['openOrders']!,
+                  icon: Icons.receipt,
+                  color: Colors.purple,
+                  onTap: () {
+                    // Navigate to the orders tab with filter using NavigationService
+                    NavigationService.navigateToTab(
+                      context, 
+                      1, 
+                      arguments: {'initialStatus': 'Open'}
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildDashboardCard({
+  // A more compact card design optimized for displaying in a row
+  Widget _buildCompactDashboardCard({
     required String title,
     required int count,
     required IconData icon,
@@ -461,56 +492,43 @@ class _HomeScreenState extends State<HomeScreen> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          child: Row(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
                   color: color,
-                  size: 20,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        count.toString(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  count.toString(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey.shade400,
-                size: 14,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -518,33 +536,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  void _navigateToOrdersByStatus(String status) {
-    // Map status to correct filter values for orders screen
-    String? filterStatus;
-    switch (status) {
-      case 'Open Orders':
-        filterStatus = 'Open';
-        break;
-      case 'Released Orders':
-        filterStatus = 'Approved'; // Maps to "Approved" tab in orders screen
-        break;
-      case 'Pending Approval':
-        filterStatus = 'Pending Approval';
-        break;
-      default:
-        filterStatus = status;
-    }
-    
-    // Navigate to orders screen with specific status filter
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const OrdersScreen(),
-        settings: RouteSettings(arguments: {'initialStatus': filterStatus}),
-      ),
-    );
-  }
+  // Method removed - now using direct navigation to SalesShell tabs
 
   Widget _buildEmptyOrdersState() {
     return Container(
@@ -825,16 +817,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Action buttons
                     Row(
                       children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
+                        Expanded(                          child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const OrdersScreen(),
-                                ),
-                              );
+                              // Navigate to orders tab using NavigationService
+                              NavigationService.navigateToTab(context, 1);
                             },
                             icon: const Icon(Icons.list, size: 18),
                             label: const Text('View All Orders'),
@@ -886,4 +873,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-} 
+}

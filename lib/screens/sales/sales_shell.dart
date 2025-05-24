@@ -3,21 +3,33 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'home/home_screen.dart';
 import 'orders/orders_screen.dart';
+import 'customers/customers_screen.dart';
 import 'queries/queries_screen.dart';
 import 'profile/profile_screen.dart';
 import 'orders/edit_order_screen.dart';
 import '../../services/auth_service.dart';
 
 class SalesShell extends StatefulWidget {
-  const SalesShell({super.key});
+  final int initialTabIndex;
+
+  const SalesShell({super.key, this.initialTabIndex = 0});
+  
+  /// Static method to switch tabs from anywhere
+  /// This can be used by NavigationService
+  static void switchTab(BuildContext context, int tabIndex, {Map<String, dynamic>? arguments}) {
+    // Find the nearest SalesShell state and call its switchTab method
+    final state = context.findAncestorStateOfType<_SalesShellState>();
+    if (state != null) {
+      state.switchTab(tabIndex, arguments: arguments);
+    }
+  }
 
   @override
   State<SalesShell> createState() => _SalesShellState();
 }
 
 class _SalesShellState extends State<SalesShell> {
-  int _selectedIndex = 0;
-
+  late int _selectedIndex;
   // Maintain separate navigation keys for each tab to enable
   // independent navigation stacks
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
@@ -25,11 +37,28 @@ class _SalesShellState extends State<SalesShell> {
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
+    GlobalKey<NavigatorState>(),
   ];
+
+  /// Allows external widgets to switch tabs programmatically
+  void switchTab(int index, {Map<String, dynamic>? arguments}) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    // If arguments are provided, pass them to the appropriate tab
+    if (arguments != null && _navigatorKeys[index].currentState != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Reset to first route and then push the arguments to the tab
+        _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialTabIndex;
     // Set preferred orientation to portrait
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -73,8 +102,7 @@ class _SalesShellState extends State<SalesShell> {
             }
             return true;
           },
-          child: Scaffold(
-            body: IndexedStack(
+          child: Scaffold(            body: IndexedStack(
               index: _selectedIndex,
               children: [
                 // Home Tab
@@ -89,15 +117,21 @@ class _SalesShellState extends State<SalesShell> {
                   (context) => const OrdersScreen(),
                 ),
 
-                // Queries Tab
+                // Customers Tab
                 _buildTabNavigator(
                   2,
+                  (context) => const CustomersScreen(),
+                ),
+
+                // Queries Tab
+                _buildTabNavigator(
+                  3,
                   (context) => const QueriesScreen(),
                 ),
 
                 // Profile Tab
                 _buildTabNavigator(
-                  3,
+                  4,
                   (context) => const ProfileScreen(),
                 ),
               ],
@@ -119,8 +153,7 @@ class _SalesShellState extends State<SalesShell> {
                     _selectedIndex = index;
                   });
                 }
-              },
-              items: const [
+              },              items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.home),
                   label: 'Home',
@@ -128,6 +161,10 @@ class _SalesShellState extends State<SalesShell> {
                 BottomNavigationBarItem(
                   icon: Icon(Icons.shopping_cart),
                   label: 'Orders',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person_search),
+                  label: 'Customers',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.question_answer),

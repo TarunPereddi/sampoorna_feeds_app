@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -81,8 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
-                          TextFormField(
+                          const SizedBox(height: 16),                          TextFormField(
                             controller: _passwordController,
                             obscureText: true,
                             decoration: InputDecoration(
@@ -93,6 +93,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderRadius: BorderRadius.circular(10.0),
                               ),
                               prefixIcon: const Icon(Icons.lock),
+                              suffixIcon: TextButton(
+                                onPressed: () => _navigateToForgotPassword(),
+                                child: const Text(
+                                  'Forgot?',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -253,12 +262,14 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
   }
-
   Future<void> _handleLogin(BuildContext context) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    // Hide keyboard immediately
+    FocusScope.of(context).unfocus();
+    
     final username = _usernameController.text;
     final password = _passwordController.text;
     
@@ -287,8 +298,25 @@ class _LoginScreenState extends State<LoginScreen> {
       
       Navigator.pushReplacementNamed(context, '/$_selectedPersona');
     }
+  }  // Navigate to forgot password screen
+  void _navigateToForgotPassword() async {
+    final returnedUserID = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ForgotPasswordScreen(
+          initialUserID: _usernameController.text,
+        ),
+      ),
+    );
+    
+    // Update the username field with the returned user ID
+    if (returnedUserID != null && returnedUserID.isNotEmpty) {
+      setState(() {
+        _usernameController.text = returnedUserID;
+      });
+    }
   }
-
+  
   @override
   void dispose() {
     _usernameController.dispose();

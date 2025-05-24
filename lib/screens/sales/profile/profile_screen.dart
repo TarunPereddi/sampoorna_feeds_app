@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
+import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import '../../login/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -10,41 +13,45 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Mock user data
-  final Map<String, dynamic> _userData = {
-    'name': 'Rajesh Kumar',
-    'email': 'rajesh.kumar@sampoorna.com',
-    'phone': '+91 9876543210',
-    'employeeId': 'SE-12345',
-    'role': 'Sales Executive',
-    'region': 'North India',
-    'joinDate': '10 Jan 2023',
-    'lastLogin': '15 Apr 2025, 08:30 AM',
-    'performance': {
-      'targets': {
-        'mtd': {
-          'achieved': 850000,
-          'target': 1000000,
-          'percentage': 85,
-        },
-        'qtd': {
-          'achieved': 2500000,
-          'target': 3000000,
-          'percentage': 83,
-        },
-      },
-      'customers': {
-        'total': 45,
-        'active': 38,
-        'new': 5,
-      },
-      'orders': {
-        'total': 120,
-        'pending': 12,
-        'completed': 108,
-      },
-    },
-  };
+  final ApiService _apiService = ApiService();
+  bool _isLoading = true;
+  String? _errorMessage;
+  Map<String, dynamic>? _salesPersonDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+  Future<void> _loadProfileData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get the current user's code
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final salesPerson = authService.currentUser;
+
+      if (salesPerson == null) {
+        throw Exception('Not logged in');
+      }
+
+      // Load sales person data
+      final salesPersonData = await _apiService.getSalesPersonDetails(salesPerson.code);
+      setState(() {
+        _salesPersonDetails = salesPersonData;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: $e';
+        _isLoading = false;
+      });
+      debugPrint('Error loading profile details: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,420 +69,185 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              // Profile Card
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      // Avatar and Basic Info
-                      Row(
-                        children: [
-                          // Avatar
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: const Color(0xFF008000),
-                            child: Text(
-                              _userData['name'].substring(0, 1),
-                              style: const TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : _errorMessage != null 
+          ? _buildErrorView() 
+          : _buildProfileView(),
+    );
+  }
 
-                          // Basic Info
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _userData['name'],
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _userData['role'],
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'ID: ${_userData['employeeId']}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Contact Information
-                      const Divider(),
-                      const SizedBox(height: 16),
-
-                      // Email
-                      _buildContactInfoItem(
-                        icon: Icons.email,
-                        label: 'Email',
-                        value: _userData['email'],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Phone
-                      _buildContactInfoItem(
-                        icon: Icons.phone,
-                        label: 'Phone',
-                        value: _userData['phone'],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Region
-                      _buildContactInfoItem(
-                        icon: Icons.location_on,
-                        label: 'Region',
-                        value: _userData['region'],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Join Date
-                      _buildContactInfoItem(
-                        icon: Icons.calendar_today,
-                        label: 'Join Date',
-                        value: _userData['joinDate'],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Last Login
-                      _buildContactInfoItem(
-                        icon: Icons.access_time,
-                        label: 'Last Login',
-                        value: _userData['lastLogin'],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Performance Summary
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Performance Summary',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Sales Targets
-                      _buildPerformanceSection(
-                        title: 'Sales Targets',
-                        children: [
-                          _buildProgressIndicator(
-                            label: 'Month to Date',
-                            achievedValue: '₹${_formatAmount(_userData['performance']['targets']['mtd']['achieved'])}',
-                            targetValue: '₹${_formatAmount(_userData['performance']['targets']['mtd']['target'])}',
-                            percentage: _userData['performance']['targets']['mtd']['percentage'],
-                          ),
-                          const SizedBox(height: 16),
-                          _buildProgressIndicator(
-                            label: 'Quarter to Date',
-                            achievedValue: '₹${_formatAmount(_userData['performance']['targets']['qtd']['achieved'])}',
-                            targetValue: '₹${_formatAmount(_userData['performance']['targets']['qtd']['target'])}',
-                            percentage: _userData['performance']['targets']['qtd']['percentage'],
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Customer Stats
-                      _buildPerformanceSection(
-                        title: 'Customer Statistics',
-                        children: [
-                          Row(
-                            children: [
-                              _buildStatCard(
-                                label: 'Total Customers',
-                                value: _userData['performance']['customers']['total'].toString(),
-                                icon: Icons.people,
-                                color: Colors.blue,
-                              ),
-                              const SizedBox(width: 16),
-                              _buildStatCard(
-                                label: 'Active Customers',
-                                value: _userData['performance']['customers']['active'].toString(),
-                                icon: Icons.check_circle,
-                                color: Colors.green,
-                              ),
-                              const SizedBox(width: 16),
-                              _buildStatCard(
-                                label: 'New Customers',
-                                value: _userData['performance']['customers']['new'].toString(),
-                                icon: Icons.person_add,
-                                color: Colors.orange,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Order Stats
-                      _buildPerformanceSection(
-                        title: 'Order Statistics',
-                        children: [
-                          Row(
-                            children: [
-                              _buildStatCard(
-                                label: 'Total Orders',
-                                value: _userData['performance']['orders']['total'].toString(),
-                                icon: Icons.shopping_cart,
-                                color: Colors.purple,
-                              ),
-                              const SizedBox(width: 16),
-                              _buildStatCard(
-                                label: 'Pending',
-                                value: _userData['performance']['orders']['pending'].toString(),
-                                icon: Icons.pending_actions,
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(width: 16),
-                              _buildStatCard(
-                                label: 'Completed',
-                                value: _userData['performance']['orders']['completed'].toString(),
-                                icon: Icons.task_alt,
-                                color: Colors.green,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Logout Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    _showLogoutDialog(context);
-                  },
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Logout'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF008000),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-            ],
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 60,
+            color: Colors.red.shade300,
           ),
+          const SizedBox(height: 16),
+          Text(
+            _errorMessage ?? 'An unknown error occurred',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2C5F2D),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: _loadProfileData,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildProfileView() {
+    final salesPerson = _salesPersonDetails;
+    
+    if (salesPerson == null) {
+      return const Center(child: Text('No profile data available'));
+    }
+    
+    return RefreshIndicator(
+      onRefresh: _loadProfileData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Profile header
+            _buildProfileHeader(salesPerson),
+            
+            const SizedBox(height: 24),
+            
+            // Profile details card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Personal Information',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Divider(height: 24),
+                    _buildProfileDetailItem('ID', salesPerson['Code'] ?? 'N/A'),
+                    _buildProfileDetailItem('Name', salesPerson['Name'] ?? 'N/A'),
+                    if (salesPerson['E_Mail'] != null && salesPerson['E_Mail'].toString().isNotEmpty)
+                      _buildProfileDetailItem('Email', salesPerson['E_Mail']),
+                    if (salesPerson['Phone_No'] != null && salesPerson['Phone_No'].toString().isNotEmpty)
+                      _buildProfileDetailItem('Phone', salesPerson['Phone_No']),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Business Information card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Business Information',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Divider(height: 24),
+                    _buildProfileDetailItem('Responsibility Center', salesPerson['Responsibility_Center'] ?? 'N/A'),
+                    _buildProfileDetailItem('Account Status', salesPerson['Block'] == true ? 'Blocked' : 'Active'),
+                    _buildProfileDetailItem('Commission %', salesPerson['Commission_Percent']?.toString() ?? 'N/A'),
+                    _buildProfileDetailItem('Location', salesPerson['Location'] ?? 'N/A'),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Logout button
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _showLogoutDialog(context),
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
   }
-
-  Widget _buildContactInfoItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF008000).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF008000),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPerformanceSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildProgressIndicator({
-    required String label,
-    required String achievedValue,
-    required String targetValue,
-    required int percentage,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label),
-            Text('$percentage%'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: percentage / 100,
-          backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(
-            percentage >= 90
-                ? Colors.green
-                : percentage >= 70
-                ? Colors.orange
-                : Colors.red,
-          ),
-          minHeight: 8,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              achievedValue,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              'Target: $targetValue',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
+  Widget _buildProfileHeader(Map<String, dynamic> salesPerson) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 24,
+            // Profile picture
+            CircleAvatar(
+              radius: 50,
+              backgroundColor: const Color(0xFF2C5F2D).withOpacity(0.1),
+              child: Text(
+                (salesPerson['Name'] != null && salesPerson['Name'].toString().isNotEmpty) 
+                    ? salesPerson['Name'].toString()[0].toUpperCase() 
+                    : 'U',
+                style: const TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2C5F2D),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
+              salesPerson['Name'] ?? 'Unknown User',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: color,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
+              salesPerson['Code'] ?? '',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 16,
               ),
-              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Role: Sales Person',
+              style: TextStyle(
+                color: Colors.grey.shade800,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -483,14 +255,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  String _formatAmount(int amount) {
-    if (amount >= 100000) {
-      return '${(amount / 100000).toStringAsFixed(1)}L';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(1)}K';
-    } else {
-      return amount.toString();
-    }
+  Widget _buildProfileDetailItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showEditProfileDialog(BuildContext context) {
@@ -519,29 +310,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Logout'),
+          title: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.red.shade600),
+              const SizedBox(width: 8),
+              const Text('Logout'),
+            ],
+          ),
           content: const Text('Are you sure you want to logout?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Navigate to login screen
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      (route) => false,
-                );
-              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF008000),
+                backgroundColor: Colors.red.shade600,
                 foregroundColor: Colors.white,
               ),
+              onPressed: () {
+                // Logout user and navigate to login screen
+                final authService = Provider.of<AuthService>(context, listen: false);
+                authService.logout();
+                
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
               child: const Text('Logout'),
             ),
           ],

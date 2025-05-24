@@ -574,14 +574,102 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
 
 // Add this to your ApiService class
   Future<Map<String, dynamic>> getCustomerDetails(String customerNo) async {
-    final response = await get('CustomerList', queryParams: {'\$filter': "No eq '$customerNo'"});
+    try {
+      // First try to get from CustomerCard endpoint which has more details
+      final response = await get('CustomerCard', queryParams: {'\$filter': "No eq '$customerNo'"});
 
-    if (response.containsKey('value') &&
-        response['value'] is List &&
-        response['value'].isNotEmpty) {
-      return response['value'][0];
+      if (response.containsKey('value') &&
+          response['value'] is List &&
+          response['value'].isNotEmpty) {
+        debugPrint('Customer details from CustomerCard: ${response['value'][0]}');
+        return response['value'][0];
+      }
+      
+      // Fallback to CustomerList endpoint
+      final listResponse = await get('CustomerList', queryParams: {'\$filter': "No eq '$customerNo'"});
+
+      if (listResponse.containsKey('value') &&
+          listResponse['value'] is List &&
+          listResponse['value'].isNotEmpty) {
+        debugPrint('Customer details from CustomerList: ${listResponse['value'][0]}');
+        return listResponse['value'][0];
+      }
+
+      throw Exception('Customer not found');
+    } catch (e) {
+      debugPrint('Error fetching customer details: $e');
+      rethrow;
     }
-
-    throw Exception('Customer not found');
   }
+  // Get multiple customer details in a single request for efficiency
+  Future<List<Map<String, dynamic>>> getMultipleCustomerDetails(List<String> customerNos) async {
+    if (customerNos.isEmpty) {
+      return [];
+    }
+    
+    try {
+      // Build a filter with OR conditions for each customer number
+      final customerNoFilters = customerNos.map((no) => "No eq '$no'").join(' or ');
+      final response = await get('CustomerList', queryParams: {'\$filter': customerNoFilters});
+
+      if (response.containsKey('value') && response['value'] is List) {
+        return List<Map<String, dynamic>>.from(response['value']);
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching multiple customer details: $e');
+      rethrow;
+    }
+  }
+    // Get just customer emails in a single request for efficiency
+  Future<List<Map<String, dynamic>>> getCustomerEmails(List<String> customerNos) async {
+    if (customerNos.isEmpty) {
+      return [];
+    }
+    
+    try {
+      // Build a filter with OR conditions for each customer number
+      final customerNoFilters = customerNos.map((no) => "No eq '$no'").join(' or ');
+      final response = await get('CustomerCard', queryParams: {
+        '\$filter': customerNoFilters,
+        '\$select': 'No,E_Mail', // Only select No and E_Mail fields
+      });
+
+      if (response.containsKey('value') && response['value'] is List) {
+        return List<Map<String, dynamic>>.from(response['value']);
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching customer emails: $e');
+      rethrow;
+    }
+  }
+
+  // Get sales person details by code
+  Future<Map<String, dynamic>> getSalesPersonDetails(String code) async {
+    try {
+      final response = await get(
+        'SalesPerson',
+        queryParams: {
+          '\$filter': "Code eq '$code'",
+        },
+      );
+      
+      final salesPeople = response['value'] as List;
+      
+      if (salesPeople.isEmpty) {
+        throw Exception('Sales person not found');
+      }
+      
+      return salesPeople.first;
+    } catch (e) {
+      debugPrint('Error fetching sales person details: $e');
+      rethrow;
+    }
+  }
+  // Get vendor details method removed as not needed
+
+  // Generic POST method for API calls
 }
