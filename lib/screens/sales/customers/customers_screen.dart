@@ -15,7 +15,7 @@ class CustomersScreen extends StatefulWidget {
   State<CustomersScreen> createState() => _CustomersScreenState();
 }
 
-class _CustomersScreenState extends State<CustomersScreen> {
+class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAliveClientMixin {
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
   
@@ -23,13 +23,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
   String _salesPersonCode = '';
   bool _isLoading = false;
   bool _isSearching = false;
-    // Pagination 
+  bool _dataLoaded = false; // Track if data has been loaded
+  
+  // Pagination 
   int _currentPage = 1;
   int _totalItems = 0;
   int _itemsPerPage = 8; // Changed to 8 items per page
   int _totalPages = 1;
   
   @override
+  bool get wantKeepAlive => true; // Keep state when switching tabs
+    @override
   void initState() {
     super.initState();
     
@@ -39,9 +43,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
     if (salesPerson != null) {
       _salesPersonCode = salesPerson.code;
     }
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     
-    // Load initial data
-    _loadCustomers();
+    // Only load data if this is the first time
+    if (!_dataLoaded) {
+      _loadCustomers();
+      _dataLoaded = true;
+    }
   }
   
   @override
@@ -271,6 +283,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
     @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: CommonAppBar(

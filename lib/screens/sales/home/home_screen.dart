@@ -18,11 +18,12 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   List<dynamic> _recentOrders = [];
   String? _errorMessage;
+  bool _dataLoaded = false; // Track if data has been loaded
 
   // Dashboard metrics
   Map<String, int> _dashboardMetrics = {
@@ -31,11 +32,23 @@ class _HomeScreenState extends State<HomeScreen> {
     'releasedOrders': 0,
     'openOrders': 0,
   };
-
+  
+  @override
+  bool get wantKeepAlive => true; // Keep the state when switching tabs
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    // We'll load data when the widget becomes visible
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Only load data if this is the first time or we're coming back to this tab
+    if (!_dataLoaded) {
+      _loadDashboardData();
+      _dataLoaded = true;
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -172,8 +185,10 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-
-  @override  Widget build(BuildContext context) {
+  @override  
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     final authService = Provider.of<AuthService>(context);
     final salesPerson = authService.currentUser;
 

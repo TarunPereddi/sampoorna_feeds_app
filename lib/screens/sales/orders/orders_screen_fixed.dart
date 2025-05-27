@@ -8,14 +8,17 @@ import 'create_order_screen.dart';
 import 'order_list_view.dart';
 import 'order_table_view.dart';
 
-class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key});
+/// An optimized version of OrdersScreen that uses lazy loading
+/// to prevent API calls until the tab is actually viewed by the user
+class OrdersScreenFixed extends StatefulWidget {
+  const OrdersScreenFixed({super.key});
 
   @override
-  State<OrdersScreen> createState() => _OrdersScreenState();
+  State<OrdersScreenFixed> createState() => _OrdersScreenFixedState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+class _OrdersScreenFixedState extends State<OrdersScreenFixed> 
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   // Tab controller for status tabs
   late TabController _tabController;
   
@@ -31,9 +34,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   final ApiService _apiService = ApiService();
   List<dynamic> _allOrders = [];
 
-  @override
-  bool get wantKeepAlive => true; // Keep state when switching tabs
-
   // For handling pagination
   int _currentPage = 1;
   int _totalPages = 1;
@@ -41,6 +41,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   final int _itemsPerPage = 10;
   bool _isLoading = false;
   bool _isInitialLoading = true;
+  
   // Status filter options - matching with tabs
   final List<String> _statusTabs = [
     'All',
@@ -51,6 +52,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   // Search controller
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  bool get wantKeepAlive => true; // Keep state when switching tabs
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +94,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       _dataLoaded = true;
     }
   }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -109,7 +115,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       // Reload orders with new status filter
       _loadOrders();
     }
-  }  // Convert tab index to API status value
+  }
+
+  // Convert tab index to API status value
   String? _getApiStatusValue(String tabStatus) {
     // Return null for "All" to not filter by status
     if (tabStatus == 'All') return null;
@@ -117,8 +125,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     // Map the tab names to actual API status values
     switch (tabStatus) {
       case 'Open': return 'Open';
-      case 'Pending Approval': return 'Pending Approval'; // Changed to match exact API value
-      case 'Approved': return 'Released'; // Changed to match exact API value
+      case 'Pending Approval': return 'Pending Approval';
+      case 'Approved': return 'Released';
       default: return null;
     }
   }
@@ -140,7 +148,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       
       if (salesPerson == null) {
         throw Exception('User not authenticated');
-      }      // Use the updated getSalesOrders method with includeCount=true
+      }
+
+      // Use the updated getSalesOrders method with includeCount=true
       final response = await _apiService.getSalesOrders(
         salesPersonName: salesPerson.name,
         searchQuery: _searchQuery,
@@ -289,7 +299,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       body: Column(
         children: [
           // Search bar
-          _buildSearchBar(),          // Status Tabs (below search bar, like in query screen)
+          _buildSearchBar(),
+          
+          // Status Tabs
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -308,7 +320,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           ),
 
           // Advanced filters section
-          _buildAdvancedFilters(isSmallScreen),          // Orders list or empty state
+          _buildAdvancedFilters(isSmallScreen),
+          
+          // Orders list or empty state
           _isInitialLoading
               ? const Expanded(
                   child: Center(child: CircularProgressIndicator()),
@@ -327,7 +341,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                               child: _allOrders.isEmpty
                                 ? _buildEmptyState()
                                 : Padding(
-                                    padding: const EdgeInsets.all(16),                                    child: isSmallScreen
+                                    padding: const EdgeInsets.all(16),
+                                    child: isSmallScreen
                                       ? OrderListView(
                                           orders: viewOrders,
                                           scrollController: ScrollController(),
@@ -354,6 +369,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       ),
     );
   }
+
   // Build pagination controls
   Widget _buildPaginationControls() {
     return Container(
@@ -369,7 +385,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.start, // Changed to start alignment
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Previous page button
           IconButton(
@@ -410,6 +426,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       ),
     );
   }
+
   // Build the search bar
   Widget _buildSearchBar() {
     return Padding(
@@ -452,7 +469,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             icon: Icon(
               Icons.filter_list,
               color: (_fromDate != null || _toDate != null) ? const Color(0xFF008000) : Colors.grey,
-            ),            onPressed: () {
+            ),
+            onPressed: () {
               // Show filter popup instead of expanding
               _showFilterPopup(context);
             },

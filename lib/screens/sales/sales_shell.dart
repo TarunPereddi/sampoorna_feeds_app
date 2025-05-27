@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'home/home_screen.dart';
-import 'orders/orders_screen.dart';
+import 'orders/orders_screen_fixed.dart';  // Using our optimized screen
 import 'customers/customers_screen.dart';
 import 'queries/queries_screen.dart';
 import 'profile/profile_screen.dart';
@@ -101,38 +101,61 @@ class _SalesShellState extends State<SalesShell> {
               return false;
             }
             return true;
-          },
-          child: Scaffold(            body: IndexedStack(
-              index: _selectedIndex,
+          },          child: Scaffold(
+            body: Stack(
               children: [
-                // Home Tab
-                _buildTabNavigator(
-                  0,
-                  (context) => const HomeScreen(),
+                // Home Tab - Only initialize when selected
+                Offstage(
+                  offstage: _selectedIndex != 0,
+                  child: _navigatorKeys[0].currentState == null && _selectedIndex != 0
+                      ? Container() // Don't build if not visible and not initialized
+                      : _buildTabNavigator(
+                          0,
+                          (context) => const HomeScreen(),
+                        ),
                 ),
 
                 // Orders Tab
-                _buildTabNavigator(
-                  1,
-                  (context) => const OrdersScreen(),
+                Offstage(
+                  offstage: _selectedIndex != 1,                  child: _navigatorKeys[1].currentState == null && _selectedIndex != 1
+                      ? Container() // Don't build if not visible and not initialized
+                      : _buildTabNavigator(
+                          1,
+                          (context) => const OrdersScreenFixed(),
+                        ),
                 ),
 
                 // Customers Tab
-                _buildTabNavigator(
-                  2,
-                  (context) => const CustomersScreen(),
+                Offstage(
+                  offstage: _selectedIndex != 2,
+                  child: _navigatorKeys[2].currentState == null && _selectedIndex != 2
+                      ? Container() // Don't build if not visible and not initialized
+                      : _buildTabNavigator(
+                          2,
+                          (context) => const CustomersScreen(),
+                        ),
                 ),
 
                 // Queries Tab
-                _buildTabNavigator(
-                  3,
-                  (context) => const QueriesScreen(),
+                Offstage(
+                  offstage: _selectedIndex != 3,
+                  child: _navigatorKeys[3].currentState == null && _selectedIndex != 3
+                      ? Container() // Don't build if not visible and not initialized
+                      : _buildTabNavigator(
+                          3,
+                          (context) => const QueriesScreen(),
+                        ),
                 ),
 
                 // Profile Tab
-                _buildTabNavigator(
-                  4,
-                  (context) => const ProfileScreen(),
+                Offstage(
+                  offstage: _selectedIndex != 4,
+                  child: _navigatorKeys[4].currentState == null && _selectedIndex != 4
+                      ? Container() // Don't build if not visible and not initialized
+                      : _buildTabNavigator(
+                          4,
+                          (context) => const ProfileScreen(),
+                        ),
                 ),
               ],
             ),
