@@ -721,4 +721,32 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       throw Exception('Failed to get customer statement report: $e');
     }
   }
+    // Get customer transactions history (ledger entries)
+  Future<List<Map<String, dynamic>>> getCustomerTransactions(String customerNo, {String? salesPersonCode}) async {
+    try {
+      String filter = "Customer_No eq '$customerNo'";
+      
+      // Add salesperson filter if provided
+      if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
+        filter += " and Salesperson_Code eq '$salesPersonCode'";
+      }
+      
+      final queryParams = {
+        '\$filter': filter,
+        '\$orderby': 'Posting_Date desc',
+        '\$top': '10' // Limit to most recent 10 transactions
+      };
+      
+      final response = await get('CLE', queryParams: queryParams);
+      
+      if (response.containsKey('value') && response['value'] is List) {
+        return List<Map<String, dynamic>>.from(response['value']);
+      }
+      
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching customer transactions: $e');
+      return [];
+    }
+  }
 }

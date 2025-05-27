@@ -18,6 +18,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   Map<String, dynamic> _customerDetails = {};
+  List<Map<String, dynamic>> _transactions = [];
+  bool _isLoadingTransactions = false;
   String? _errorMessage;
   late TabController _tabController;
   
@@ -26,8 +28,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     locale: 'en_IN',
     symbol: '₹',
     decimalDigits: 2,
-  );
-  @override
+  );  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
@@ -39,7 +40,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     _tabController.dispose();
     super.dispose();
   }
-
   Future<void> _loadCustomerDetails() async {
     setState(() {
       _isLoading = true;
@@ -57,12 +57,47 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       setState(() {
         _customerDetails = customerDetails;
         _isLoading = false;
-      });    } catch (e) {
+      });
+      
+      // Load transactions after customer details are loaded
+      _loadTransactions();
+      
+    } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load customer details: $e';
         _isLoading = false;
       });
       debugPrint('Error loading customer details: $e');
+    }
+  }
+    Future<void> _loadTransactions() async {
+    setState(() {
+      _isLoadingTransactions = true;
+    });
+    
+    try {
+      // Extract salesperson code from customer details if available
+      String? salesPersonCode;
+      if (_customerDetails.containsKey('Salesperson_Code') && 
+          _customerDetails['Salesperson_Code'] != null &&
+          _customerDetails['Salesperson_Code'].toString().isNotEmpty) {
+        salesPersonCode = _customerDetails['Salesperson_Code'];
+      }
+      
+      final transactions = await _apiService.getCustomerTransactions(
+        widget.customerNo,
+        salesPersonCode: salesPersonCode,
+      );
+      
+      setState(() {
+        _transactions = transactions;
+        _isLoadingTransactions = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading transactions: $e');
+      setState(() {
+        _isLoadingTransactions = false;
+      });
     }
   }
 
@@ -75,43 +110,62 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         SnackBar(content: Text('Could not launch phone call to $phoneNumber')),
       );
     }
-  }
-  Future<void> _sendEmail(String email) async {
-    final Uri emailUri = Uri(
-      scheme: 'mailto',
-      path: email,
-    );
+  }  Future<void> _sendEmail(String email) async {
     try {
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
-      } else {
+      final cleanEmail = email.trim();
+      
+      if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not launch email to $email')),
+          const SnackBar(content: Text('Invalid email address')),
         );
+        return;
+      }
+
+      final Uri emailUri = Uri(
+        scheme: 'mailto',
+        path: cleanEmail,
+        query: 'subject=Inquiry from Sampoorna Feeds App',
+      );
+      
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(
+          emailUri,
+          mode: LaunchMode.externalApplication, // Add this mode
+        );
+      } else {
+        // Fallback for Android
+        final Uri alternativeUri = Uri.parse('mailto:$cleanEmail?subject=Inquiry');
+        await launchUrl(alternativeUri, mode: LaunchMode.externalApplication);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending email: $e')),
+        SnackBar(content: Text('Could not open email app: $e')),
       );
     }
   }
-
   Future<void> _openMaps(String address) async {
-    if (address.isEmpty) {
-      // Silently return if address is empty
-      return;
-    }
+    if (address.isEmpty) return;
     
-    final Uri mapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}');
     try {
-      if (await canLaunchUrl(mapsUri)) {
-        await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+      final encodedAddress = Uri.encodeComponent(address);
+      
+      // Primary: Google Maps web URL
+      final Uri googleMapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+      
+      if (await canLaunchUrl(googleMapsUri)) {
+        await launchUrl(
+          googleMapsUri,
+          mode: LaunchMode.externalApplication,
+        );
       } else {
-        debugPrint('Could not open maps application');
+        // Fallback: geo: scheme for Android
+        final Uri geoUri = Uri.parse('geo:0,0?q=$encodedAddress');
+        await launchUrl(geoUri, mode: LaunchMode.externalApplication);
       }
     } catch (e) {
-      // Log error but don't show snackbar
-      debugPrint('Error opening maps: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open maps: $e')),
+      );
     }
   }
   @override
@@ -308,13 +362,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                   fontSize: 14,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
+              const SizedBox(height: 4),              Text(
                 formattedNetChange,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: netChange >= 0 ? Colors.white : Colors.red.shade200,
+                  color: netChange < 0 ? Colors.white : 
+                         netChange > 0 ? Colors.red.shade200 : 
+                         Colors.white,
                 ),
               ),
             ],
@@ -558,7 +613,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       ),
     );
   }
-
   Widget _buildFinanceTab() {
     // Format currency values
     final netChange = _customerDetails['Net_Change'] ?? 0.0;
@@ -589,8 +643,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Balance
+                    // Balance
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -600,13 +653,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                           fontSize: 15,
                           color: Colors.grey.shade700,
                         ),
-                      ),
-                      Text(
+                      ),                      Text(
                         formattedNetChange,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: netChange < 0 ? Colors.red : Colors.green.shade700,
+                          color: netChange < 0 ? Colors.green.shade700 : 
+                                 netChange > 0 ? Colors.red : 
+                                 Colors.black,
                         ),
                       ),
                     ],
@@ -641,7 +695,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           
           const SizedBox(height: 16),
           
-          // Transaction History Card (can be added in future)
+          // Transaction History Card
           Card(
             elevation: 1,
             margin: EdgeInsets.zero,
@@ -651,21 +705,39 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Recent Transactions',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Recent Transactions',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (_isLoadingTransactions)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Center(
-                    heightFactor: 2.0,
-                    child: Text(
-                      'Transaction history will appear here',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Transactions list
+                  if (_transactions.isEmpty && !_isLoadingTransactions)
+                    const Center(
+                      heightFactor: 2.0,
+                      child: Text(
+                        'No recent transactions found',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  else
+                    _buildTransactionsList(),
                 ],
               ),
             ),
@@ -675,6 +747,130 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           const SizedBox(height: 100),
         ],
       ),
+    );
+  }
+  
+  Widget _buildTransactionsList() {
+    return Column(
+      children: [
+        // Table header
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Date',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Document No',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Debit',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Credit',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const Divider(height: 1),
+        
+        // Table rows
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _transactions.length,
+          separatorBuilder: (context, index) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final transaction = _transactions[index];
+            final postingDate = transaction['Posting_Date'] != null
+                ? DateFormat('dd/MM/yy').format(DateTime.parse(transaction['Posting_Date']))
+                : 'N/A';
+            final documentNo = transaction['Document_No'] ?? 'N/A';
+            final debitAmount = transaction['Debit_Amount'] ?? 0.0;
+            final creditAmount = transaction['Credit_Amount'] ?? 0.0;
+            
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      postingDate,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      documentNo,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      debitAmount > 0 ? _currencyFormat.format(debitAmount) : '',
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      creditAmount > 0 ? _currencyFormat.format(creditAmount) : '',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -859,9 +1055,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           },
         );
         return;
-      }
-        // Generate and share PDF
-      bool success = await PdfService.generateAndSharePdf(
+      }      // Save PDF to Downloads folder
+      bool success = await PdfService.saveToDownloads(
         base64String: base64String,
         fileName: fileName,
         context: context,
@@ -870,7 +1065,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${reportType == 'invoice' ? 'Invoice' : 'Statement'} generated successfully'),
+            content: Text('${reportType == 'invoice' ? 'Invoice' : 'Statement'} saved to Downloads folder'),
             backgroundColor: Colors.green,
           ),
         );
@@ -913,7 +1108,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             ],
           );
         },
-      );
-    }
+      );    }
   }
 }
