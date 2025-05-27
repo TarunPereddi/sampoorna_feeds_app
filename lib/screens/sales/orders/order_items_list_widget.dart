@@ -124,10 +124,20 @@ class OrderItemsListWidget extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
       itemBuilder: (context, index) {
-        final item = items[index];
+        final item = items[index];        // Check if the item cannot be deleted
+        final bool cannotDelete = item['cannotDelete'] == true;
+        final String? errorReason = cannotDelete ? _extractErrorReason(item['itemDescription']) : null;
+        
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
-          color: Colors.grey.shade50,
+          color: cannotDelete ? Colors.red.shade50 : Colors.grey.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: cannotDelete ? Colors.red.shade200 : Colors.grey.shade200,
+              width: cannotDelete ? 1.5 : 1,
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(12.0),
             child: Column(
@@ -139,19 +149,29 @@ class OrderItemsListWidget extends StatelessWidget {
                     Expanded(
                       child: Text(
                         item['itemNo'] as String,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
+                          color: cannotDelete ? Colors.red.shade800 : null,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                      onPressed: () => onRemoveItem(index),
-                    ),
+                    cannotDelete
+                      ? Tooltip(
+                          message: 'Cannot delete: $errorReason',
+                          child: Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade700,
+                            size: 20,
+                          ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          onPressed: () => onRemoveItem(index),
+                        ),
                   ],
                 ),
                 const Divider(),
@@ -230,7 +250,6 @@ class OrderItemsListWidget extends StatelessWidget {
       },
     );
   }
-
   // Table layout for larger screens
   Widget _buildItemsTable() {
     return SingleChildScrollView(
@@ -259,15 +278,27 @@ class OrderItemsListWidget extends StatelessWidget {
               DataCell(Text('₹${(item['price'] as double).toStringAsFixed(2)}')),
               DataCell(Text('₹${(item['totalAmount'] as double).toStringAsFixed(2)}')),
               DataCell(
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: () => onRemoveItem(index),
-                ),
+                item['cannotDelete'] == true
+                ? Tooltip(
+                    message: 'Cannot delete: ${_extractErrorReason(item['itemDescription'])}',
+                    child: Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                    onPressed: () => onRemoveItem(index),
+                  ),
               ),
             ],
           );
         }),
       ),
     );
+  }
+  
+  // Extract error reason from item description
+  String _extractErrorReason(String description) {
+    final RegExp regex = RegExp(r'\((.*?)\)$');
+    final match = regex.firstMatch(description);
+    return match?.group(1) ?? 'Cannot Delete';
   }
 }

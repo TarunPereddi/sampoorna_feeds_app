@@ -6,6 +6,7 @@ class ShipTo {
   final String? city;
   final String? state;
   final String? postCode;
+  final String? phoneNo; // Added phone number field
 
   ShipTo({
     required this.customerNo,
@@ -15,6 +16,7 @@ class ShipTo {
     this.city,
     this.state,
     this.postCode,
+    this.phoneNo, // Added to constructor
   });
 
   factory ShipTo.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class ShipTo {
       city: json['City'] as String?,
       state: json['State'] as String?,
       postCode: json['Post_Code'] as String?,
+      phoneNo: json['Phone_No'] as String?, // Added to fromJson
     );
   }
 

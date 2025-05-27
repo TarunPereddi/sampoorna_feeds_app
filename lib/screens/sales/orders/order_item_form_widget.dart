@@ -349,7 +349,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       _itemSearchController.clear();
     });
   }
-
   // Add the current item to the order
   void _addItemToOrder() {
     if (!_itemFormKey.currentState!.validate()) {
@@ -362,17 +361,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       );
       return;
     }
-    
-    // Add this check for price availability
-  if (!_isPriceAvailable || _price <= 0) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Price not available for this item. Please select another item.'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
 
     final Map<String, dynamic> newItem = {
       'itemNo': _selectedItem!.no,
@@ -451,71 +439,50 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         });
 
         // Always recalculate after price changes, outside of setState
-        _calculateItemTotal();
-      } else {
+        _calculateItemTotal();      } else {
+        // Price not available, but we'll continue with zero price
         setState(() {
           _isLoadingPrice = false;
-          _isPriceAvailable = false;
+          _isPriceAvailable = true; // Still mark as available so we can proceed
           _price = 0;
           _priceController.text = '0.0';
           _mrp = 0;
           _mrpController.text = '0.0';
         });
 
-        // Show message about using default price
+        // Inform user but don't reset the selection
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Price not available for this item. Please select another item.'),
-            backgroundColor: Colors.red,
+            content: Text('Price not available for this item. Continuing with zero price.'),
+            backgroundColor: Colors.orange,
           ),
         );
-        setState(() {
-          _selectedItem = null;
-          _selectedUnitOfMeasure = null;
-          _itemSearchController.clear();
-        });
-      }
-    } catch (e) {
+      }    } catch (e) {
       if (!mounted) return; // Check again
 
       debugPrint('Error fetching sales price: $e');
 
       setState(() {
-        _selectedItem = null;
-        _selectedUnitOfMeasure = null;
-        _itemSearchController.clear();
-        _isPriceAvailable = false;
+        _isLoadingPrice = false;
+        _isPriceAvailable = true; // Set to true so we can continue
+        _price = 0;
+        _priceController.text = '0.0';
       });
 
-      // Recalculate with default prices
+      // Recalculate with zero price
       _calculateItemTotal();
 
-      // Show error message
+      // Show error message but continue
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Price fetch error: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Could not fetch price: $e. Continuing with zero price.'),
+          backgroundColor: Colors.orange,
         ),
       );
     }
-  }
-  // Set default price when sales price API doesn't return valid data
-  void _setDefaultPrice() {
-    // If we have an MRP, use that
-    if (_mrp > 0) {
-      _price = _mrp;
-    } else {
-      // Otherwise use a default value
-      _price = 1000.0; // Default price as specified
-    }
-    _priceController.text = _price.toString();
-    _calculateItemTotal();
-  }
-
-  // Add this helper method to show UoM selection directly in a dialog
+  }  // Add this helper method to show UoM selection directly in a dialog
   Future<String?> _showUomSelectionDialog(List<String> uoms, String? currentUom) async {
     String? selectedValue = currentUom;
-    String filterText = '';
     List<String> filteredUoms = List.from(uoms);
     
     return showDialog<String>(
@@ -686,7 +653,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       ),
     );
   }
-
   // Layout for small screens
   Widget _buildSmallScreenLayout() {
     return Column(
@@ -710,26 +676,38 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         ),
         const SizedBox(height: 16),
 
-        // MRP - now non-editable with loading state
-        _buildReadOnlyField(
-          label: 'MRP',
-          value: _mrpController.text,
-          isLoading: _isLoadingPrice,
-        ),
-        const SizedBox(height: 16),
-
-        // Unit Price - now non-editable with loading state
-        _buildReadOnlyField(
-          label: 'Unit Price',
-          value: _priceController.text,
-          isLoading: _isLoadingPrice,
-        ),
-        const SizedBox(height: 16),
-
-        // Total Amount
-        _buildReadOnlyField(
-          label: 'Total Amount',
-          value: _totalAmountController.text,
+        // Price Fields in a single row
+        Row(
+          children: [
+            // MRP - now more compact
+            Expanded(
+              child: _buildReadOnlyField(
+                label: 'MRP',
+                value: _mrpController.text,
+                isLoading: _isLoadingPrice,
+                smallVersion: true,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Unit Price - now more compact
+            Expanded(
+              child: _buildReadOnlyField(
+                label: 'Price',
+                value: _priceController.text,
+                isLoading: _isLoadingPrice,
+                smallVersion: true,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Total Amount
+            Expanded(
+              child: _buildReadOnlyField(
+                label: 'Total',
+                value: _totalAmountController.text,
+                smallVersion: true,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -758,14 +736,13 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-
-        // Row 2: Quantity, MRP, Price, Total
+        const SizedBox(height: 16),        // Row 2: Quantity, MRP, Price, Total
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Quantity
             Expanded(
+              flex: 2,
               child: _buildNumberField(
                 label: 'Quantity',
                 controller: _quantityController,
@@ -773,8 +750,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               ),
             ),
             const SizedBox(width: 16),
-            // MRP - now non-editable with loading state
+            // MRP - now with smaller width
             Expanded(
+              flex: 1,
               child: _buildReadOnlyField(
                 label: 'MRP',
                 value: _mrpController.text,
@@ -782,8 +760,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               ),
             ),
             const SizedBox(width: 16),
-            // Unit Price - now non-editable with loading state
+            // Unit Price - now with smaller width
             Expanded(
+              flex: 1,
               child: _buildReadOnlyField(
                 label: 'Unit Price',
                 value: _priceController.text,
@@ -793,6 +772,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             const SizedBox(width: 16),
             // Total Amount
             Expanded(
+              flex: 1,
               child: _buildReadOnlyField(
                 label: 'Total Amount',
                 value: _totalAmountController.text,
@@ -803,7 +783,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       ],
     );
   }
-
   // Build a number input field
   Widget _buildNumberField({
     required String label,
@@ -822,7 +801,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6), // Reduced spacing
         Stack(
           children: [
             TextFormField(
@@ -839,7 +818,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                     color: Colors.grey.shade300,
                   ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), // Reduced vertical padding
                 filled: true,
                 fillColor: enabled ? Colors.white : Colors.grey.shade100,
                 prefixText: label == 'Total Amount' || label == 'MRP' || label == 'Unit Price' ? '₹' : null,
@@ -868,38 +847,44 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       ],
     );
   }
-
   // Build a read-only field for displaying prices and amounts
   Widget _buildReadOnlyField({
     required String label,
     required String value,
     bool isLoading = false,
+    bool smallVersion = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 14,
+          style: TextStyle(
+            fontSize: smallVersion ? 12 : 14,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Stack(
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              padding: EdgeInsets.symmetric(
+                horizontal: 12, 
+                vertical: smallVersion ? 10 : 16
+              ),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                label.contains('Price') || label.contains('MRP') || label.contains('Amount') 
+                label.contains('Price') || label.contains('MRP') || label.contains('Amount') || label.contains('Total')
                     ? '₹$value' 
                     : value,
+                style: TextStyle(
+                  fontSize: smallVersion ? 13 : 14,
+                ),
               ),
             ),
             if (isLoading)

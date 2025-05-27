@@ -107,15 +107,15 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         }
       } else {
         debugPrint('Customer_Price_Group from order: ${_orderData!['Customer_Price_Group']}');
-      }
+      }      // Keep a copy of existing items to check for undeletable status
+      final List<Map<String, dynamic>> previousItems = List.from(_orderItems);
 
       // Fetch order lines
       final orderLines = await _apiService.getSalesOrderLines(widget.orderNo);
-
       // Convert order lines to the format used by OrderItemsListWidget
       _originalItems = orderLines.map((line) {
         final itemNo = line['No'] as String? ?? '';
-        final description = line['Description'] as String? ?? 'Unknown Item';
+        final description = line['Description'] as String? ?? '';
 
         // Get quantity
         final quantity = line['Quantity'] != null
@@ -137,27 +137,57 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
 
         // Store the original line number for reference
         final lineNo = line['Line_No'] as int? ?? 0;
+        
+        // Check if this item was previously marked as cannot delete
+        bool wasUndeletable = false;
+        String? errorReason;
+        if (_orderItems.isNotEmpty) {
+          for (var existingItem in _orderItems) {
+            if (existingItem['lineNo'] == lineNo && existingItem['cannotDelete'] == true) {
+              wasUndeletable = true;
+              // Extract the error reason from description if it exists
+              final RegExp regex = RegExp(r'\((.*?)\)$');
+              final match = regex.firstMatch(existingItem['itemDescription'].toString());
+              if (match != null && match.group(1) != null) {
+                errorReason = match.group(1);
+              }
+              break;
+            }
+          }
+        }
+        
+        // Debug info for line numbers
+        debugPrint('Order line: $lineNo - $itemNo - $description${wasUndeletable ? " (Undeletable)" : ""}');
 
         return {
           'itemNo': itemNo,
-          'itemDescription': description,
+          'itemDescription': wasUndeletable && errorReason != null 
+              ? '$description ($errorReason)'
+              : description,
           'quantity': quantity,
           'price': unitPrice,
-          'mrp': unitPrice, // Use unit price as MRP if not available
+          'mrp': unitPrice,
           'unitOfMeasure': unitOfMeasure,
           'totalAmount': lineAmount,
-          'lineNo': lineNo, // Store the original line number
+          'lineNo': lineNo,
+          'cannotDelete': wasUndeletable,
         };
       }).toList();
-
+      
       // Initialize _orderItems with a copy of original items
       _orderItems = List.from(_originalItems);
 
-      // Initialize tracking collections
+      // Clear tracking collections since we're reloading
       _itemsToDelete = [];
       _itemsToAdd = [];
 
       debugPrint('Order items loaded: ${_orderItems.length}');
+      // Log all line numbers for verification
+      for (var item in _orderItems) {
+        if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
+          debugPrint('Tracking order line: ${item['lineNo']} - ${item['itemDescription']}');
+        }
+      }
 
       // Fetch locations
       final authService = Provider.of<AuthService>(context, listen: false);
@@ -246,36 +276,75 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             ? _buildSubmittingView()
             : _errorMessage != null
               ? _buildErrorView()
-              : _buildOrderEditForm(),
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: const Color(0xFFE8F5E9),
-          selectedItemColor: const Color(0xFF2C5F2D),
-          unselectedItemColor: Colors.grey,
-          currentIndex: 1, // Orders tab is active
-          type: BottomNavigationBarType.fixed,
-          onTap: (index) {
-            if (index != 1) {
-              Navigator.of(context).pop();
-            }
-          },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
+              : _buildOrderEditForm(),        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.2),
+                spreadRadius: 1,
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(15),
+              topRight: Radius.circular(15),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_cart),
-              label: 'Orders',
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [                // Back button (smaller version)
+                SizedBox(
+                  width: 100,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back, size: 16),
+                    label: const Text('BACK', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade200,
+                      foregroundColor: Colors.black87,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),                // Save button (larger and more prominent)
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSubmitting ? null : _saveOrderChanges,
+                    icon: _isSubmitting 
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 18),
+                    label: const Text('SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF008000),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.question_answer),
-              label: 'Queries',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -349,29 +418,27 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          
-          // Order status chip
+            // Order status chip
           Center(
             child: _buildStatusChip(_orderData!['Status'] ?? 'Unknown'),
           ),
-          const SizedBox(height: 24),
-          
-          // Order Information
+          const SizedBox(height: 16), // Reduced spacing
+            // Order Information
           Card(
             elevation: 2,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12), // Reduced padding
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Order Information',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16, // Reduced font size
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12), // Reduced spacing
                   
                   // Order information as a simple table
                   Table(
@@ -390,61 +457,27 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
+            ),          ),
+          const SizedBox(height: 16), // Reduced spacing
 
           // Order Item Form Widget
           OrderItemFormWidget(
             isSmallScreen: isSmallScreen,
             onAddItem: _addItem,
-            locationCode: _orderData!['Location_Code'] as String? ?? '',
-            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
+            locationCode: _orderData!['Location_Code'] as String? ?? '',            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
             isEditMode: true,
           ),
-          
-          const SizedBox(height: 24),
+          const SizedBox(height: 16), // Reduced spacing
           
           // Order Items List Widget
           OrderItemsListWidget(
             items: _orderItems,
             isSmallScreen: isSmallScreen,
-            onRemoveItem: _removeItem,
-            onClearAll: _clearAllItems,
+            onRemoveItem: _removeItem,            onClearAll: _clearAllItems,
             totalAmount: _calculateOrderTotal(),
           ),
           
-          const SizedBox(height: 24),
-          
-          // Save Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isSubmitting ? null : _saveOrderChanges,
-              icon: _isSubmitting 
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.save),
-              label: const Text('SAVE CHANGES'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2C5F2D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 24),
+          const SizedBox(height: 16), // Reduced spacing
         ],
       ),
     );
@@ -464,36 +497,44 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Item added to order')),
     );
-  }
-
-  void _removeItem(int index) {
+  }  void _removeItem(int index) {
     final item = _orderItems[index];
+
+    // Check if this item is marked as cannot delete
+    if (item['cannotDelete'] == true) {
+      // Show a message explaining why the item cannot be deleted
+      String errorReason = "This item cannot be deleted";
+      if (item['itemDescription'] != null) {
+        final RegExp regex = RegExp(r'\((.*?)\)$');
+        final match = regex.firstMatch(item['itemDescription']);
+        if (match != null && match.group(1) != null) {
+          errorReason = "This item cannot be deleted: ${match.group(1)}";
+        }
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorReason),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return; // Don't proceed with deletion
+    }
 
     // If the item has a line number (existing item), add to delete list
     if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
-      _itemsToDelete.add(item['lineNo']);
+      final lineNo = item['lineNo'] as int;
+      if (!_itemsToDelete.contains(lineNo)) {
+        _itemsToDelete.add(lineNo);
+        debugPrint('Added line $lineNo to delete list');
+      }
     }
 
     setState(() {
       _orderItems.removeAt(index);
     });
   }
-
-  // Add special version of addItem method for edit screen
-  void _addItemToOrder(Map<String, dynamic> item) {
-    // New items don't have line numbers
-    _itemsToAdd.add(item);
-
-    setState(() {
-      _orderItems.add(item);
-    });
-
-    // Show success snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Item added to order')),
-    );
-  }
-  
   void _clearAllItems() {
     showDialog(
       context: context,
@@ -506,7 +547,18 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () {              // Process each item like individual deletion
+              for (var item in List.from(_orderItems)) {
+                if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
+                  final lineNo = item['lineNo'] as int;
+                  // Check for duplicates before adding to delete list
+                  if (!_itemsToDelete.contains(lineNo)) {
+                    _itemsToDelete.add(lineNo);
+                    debugPrint('Adding line $lineNo to delete list');
+                  }
+                }
+              }
+              
               setState(() {
                 _orderItems.clear();
               });
@@ -530,25 +582,16 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     }
     return total;
   }
-  
   // Save all changes to the order
   Future<void> _saveOrderChanges() async {
-    // If no items, show an error
-    if (_orderItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot save order without items'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _isSubmitting = true;
       _submissionStatus = 'Preparing to update order...';
     });
-
+    
+    // Track failed deletions
+    List<Map<String, dynamic>> failedDeletions = [];
+    
     try {
       // 1. First, reopen the order if it's not already open
       if (_orderData!['Status'] != 'Open') {
@@ -556,16 +599,102 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         await _apiService.reopenSalesOrder(widget.orderNo);
       }
 
-      // 2. Delete items that need to be removed
+      debugPrint('Order items count before saving: ${_orderItems.length}');
+      debugPrint('Items to delete count: ${_itemsToDelete.length}');      // 2. Delete items that need to be removed
       if (_itemsToDelete.isNotEmpty) {
         _updateSubmissionStatus('Removing items...');
-
+        
+        // Log all items to be deleted
+        debugPrint('Items to delete (${_itemsToDelete.length}): $_itemsToDelete');        
         // Sort in descending order to avoid index issues
         _itemsToDelete.sort((a, b) => b.compareTo(a));
 
+        // Process each line for deletion
+        List<int> successfullyDeletedLines = [];
+        
         for (var lineNo in _itemsToDelete) {
-          await _apiService.deleteSalesOrderLine(widget.orderNo, lineNo);
+          _updateSubmissionStatus('Deleting line $lineNo...');
+          debugPrint('Deleting line: $lineNo');
+          try {
+            await _apiService.deleteSalesOrderLine(widget.orderNo, lineNo);
+            debugPrint('Successfully deleted line: $lineNo');
+            successfullyDeletedLines.add(lineNo);
+          } catch (e) {
+            debugPrint('Error deleting line $lineNo: $e');
+            // Extract error message and line info
+            String errorMessage = e.toString();
+            // Find the item description for this line number
+            String itemDescription = "Unknown Item";
+            Map<String, dynamic>? failedItem;
+            
+            for (var item in _originalItems) {
+              if (item['lineNo'] == lineNo) {
+                itemDescription = item['itemDescription'];
+                failedItem = Map<String, dynamic>.from(item);
+                break;
+              }
+            }
+            
+            // Clean up the error message to extract the actual reason
+            String displayError = "";
+            if (errorMessage.contains("Item Already Shipped")) {
+              displayError = "Already Shipped";
+            } else if (errorMessage.contains("message")) {
+              try {
+                // Try to extract the message part from the error JSON
+                int messageStart = errorMessage.indexOf("message") + 10; // "message":"
+                int messageEnd = errorMessage.indexOf(".", messageStart);
+                if (messageEnd == -1) {
+                  messageEnd = errorMessage.indexOf("\"", messageStart);
+                }
+                if (messageStart > 0 && messageEnd > messageStart) {
+                  displayError = errorMessage.substring(messageStart, messageEnd);
+                }
+              } catch (formatEx) {
+                displayError = "Cannot Delete";
+                debugPrint('Error formatting error message: $formatEx');
+              }
+            } else {
+              displayError = "Cannot Delete";
+            }
+            
+            // Add to failed deletions list with complete error info
+            failedDeletions.add({
+              'lineNo': lineNo,
+              'description': itemDescription,
+              'error': errorMessage,
+              'displayError': displayError,
+              'item': failedItem
+            });
+          }
         }
+        
+        // Remove only the successfully deleted lines from _itemsToDelete
+        for (var lineNo in successfullyDeletedLines) {
+          _itemsToDelete.remove(lineNo);
+        }
+        
+        // If there were failed deletions, restore them to the order items list with error tags
+        if (failedDeletions.isNotEmpty && mounted) {
+          for (var failedItem in failedDeletions) {
+            if (failedItem['item'] != null) {
+              Map<String, dynamic> item = failedItem['item'];
+              // Add an error tag to the item description
+              item['itemDescription'] = "${item['itemDescription']} (${failedItem['displayError']})";
+              item['cannotDelete'] = true;
+              
+              // Add the item back to the order items
+              setState(() {
+                _orderItems.add(item);
+              });
+            }
+          }
+          
+          // Show the error dialog
+          Future.microtask(() => _showDeleteErrorDialog(failedDeletions));
+        }
+      } else {
+        debugPrint('No items to delete');
       }
 
       // 3. Add ONLY new items (not existing ones)
@@ -591,21 +720,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             quantity: quantity,
           );
         }
-      }
-
-      _updateSubmissionStatus('Order updated successfully!');
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order updated successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Return to orders screen
-      if (mounted) {
+      }      _updateSubmissionStatus('Order updated successfully!');
+      
+      // Determine if we should return to order screen or stay on edit screen
+      bool shouldStayOnEditScreen = failedDeletions.isNotEmpty;
+        // Show success message only if everything was successful
+      if (!failedDeletions.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }setState(() {
+        _isSubmitting = false;
+        // Clear the tracking arrays after successful update
+        if (!shouldStayOnEditScreen) {
+          _itemsToDelete.clear();
+          _itemsToAdd.clear();
+        }
+      });
+      
+      // Return to orders screen only if everything was successful
+      if (mounted && !shouldStayOnEditScreen) {
         Navigator.of(context).pop();
+      }
+      
+      // If staying on screen due to errors, reload the order details
+      if (shouldStayOnEditScreen && mounted) {
+        Future.microtask(() => _loadOrderDetails());
       }
     } catch (e) {
       setState(() {
@@ -629,26 +772,27 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       });
     }
   }
-  
-  TableRow _buildInfoRow(String label, String value) {
+    TableRow _buildInfoRow(String label, String value) {
     return TableRow(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          padding: const EdgeInsets.symmetric(vertical: 6.0), // Reduced vertical padding
           child: Text(
             label,
             style: const TextStyle(
               fontWeight: FontWeight.w500,
               color: Colors.grey,
+              fontSize: 13, // Slightly smaller font
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          padding: const EdgeInsets.symmetric(vertical: 6.0), // Reduced vertical padding
           child: Text(
             value,
             style: const TextStyle(
               fontWeight: FontWeight.w500,
+              fontSize: 13, // Slightly smaller font
             ),
           ),
         ),
@@ -720,5 +864,101 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
     
     return '${location.code} - ${location.name}';
+  }
+    // Show error dialog for failed deletions
+  void _showDeleteErrorDialog(List<Map<String, dynamic>> failedDeletions) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700, size: 24),
+            const SizedBox(width: 8),
+            const Text('Could Not Delete Some Items'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The following items could not be deleted:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ...failedDeletions.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Container(
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.red.shade50,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              item['description'],
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Reason: ',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              item['displayError'] ?? 'Unknown error',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              )).toList(),
+              const SizedBox(height: 8),
+              Text(
+                'These items have been tagged and cannot be deleted.',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey.shade700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK, GOT IT'),
+          ),
+        ],
+      ),
+    );
   }
 }

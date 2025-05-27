@@ -202,7 +202,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                             backgroundColor: const Color(0xFF2C5F2D),
                             foregroundColor: Colors.white,
                             icon: const Icon(Icons.receipt_long),
-                            label: const Text('Generate Invoice'),
+                            label: const Text('Invoice'),
                           ),
                           const SizedBox(height: 12),
                           FloatingActionButton.extended(
@@ -213,7 +213,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                             backgroundColor: const Color(0xFF2C5F2D),
                             foregroundColor: Colors.white,
                             icon: const Icon(Icons.summarize),
-                            label: const Text('Generate Report'),
+                            label: const Text('Report'),
                           ),
                         ],
                       ),
@@ -892,7 +892,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                     color: const Color(0xFF2C5F2D),
                   ),
                   const SizedBox(width: 8),
-                  Text(reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement'),
+                  Text(reportType == 'invoice' ? 'Invoice' : 'Report'),
                 ],
               ),
               content: Column(
@@ -991,20 +991,27 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     );
   }
 
-  Future<void> _generateReport(String reportType, DateTime fromDate, DateTime toDate) async {
-    // Show loading dialog
+  Future<void> _generateReport(String reportType, DateTime fromDate, DateTime toDate) async {    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return const AlertDialog(
-          content: Row(
+        return AlertDialog(
+          title: Row(
             children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Text('Generating PDF...'),
+              const SizedBox(
+                width: 24, 
+                height: 24, 
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C5F2D)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text('Generating ${reportType == 'invoice' ? 'Invoice' : 'Report'}...'),
             ],
           ),
+          content: const Text('Please wait while we prepare your document.'),
         );
       },
     );
@@ -1014,21 +1021,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       
       // Create a variable to track if the dialog is showing
       bool isDialogShowing = true;
-      
-      if (reportType == 'invoice') {
+        if (reportType == 'invoice') {
         base64String = await _apiService.getInvoiceReport(
           customerNo: widget.customerNo,
           fromDate: fromDate,
           toDate: toDate,
         );
-        fileName = 'Invoice_${widget.customerNo}_${DateFormat('yyyyMMdd').format(fromDate)}_${DateFormat('yyyyMMdd').format(toDate)}.pdf';
+        fileName = 'Invoice_${widget.customerNo}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       } else {
         base64String = await _apiService.getCustomerStatementReport(
           customerNo: widget.customerNo,
           fromDate: fromDate,
           toDate: toDate,
         );
-        fileName = 'Statement_${widget.customerNo}_${DateFormat('yyyyMMdd').format(fromDate)}_${DateFormat('yyyyMMdd').format(toDate)}.pdf';
+        fileName = 'Statement_${widget.customerNo}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       }
       
       // Close loading dialog if it's still showing

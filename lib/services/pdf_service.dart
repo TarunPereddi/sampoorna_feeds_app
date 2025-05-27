@@ -90,7 +90,6 @@ class PdfService {  static Future<bool> generateAndSharePdf({
       return false;
     }
   }
-
   static Future<bool> saveToDownloads({
     required String base64String,
     required String fileName,
@@ -102,14 +101,15 @@ class PdfService {  static Future<bool> generateAndSharePdf({
       }
       
       final bytes = base64Decode(base64String);
-      
       Directory directory;
+      String filePath;
       
       if (Platform.isAndroid) {
         // Request storage permission first
-        if (await Permission.storage.request().isGranted || 
-            await Permission.manageExternalStorage.request().isGranted) {
-          
+        final storagePermission = await Permission.storage.request();
+        final manageStoragePermission = await Permission.manageExternalStorage.request();
+        
+        if (storagePermission.isGranted || manageStoragePermission.isGranted) {
           // Try Downloads folder first
           directory = Directory('/storage/emulated/0/Download');
           if (!await directory.exists()) {
@@ -121,40 +121,109 @@ class PdfService {  static Future<bool> generateAndSharePdf({
             directory = await getApplicationDocumentsDirectory();
           }
         } else {
-          directory = await getApplicationDocumentsDirectory();
+          // Show permission denied dialog
+          if (context.mounted) {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Permission Required'),
+                  content: const Text('Storage permission is required to save PDF files. Please grant permission in settings.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => openAppSettings(),
+                      child: const Text('Open Settings'),
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+          return false;
         }
       } else {
         directory = await getApplicationDocumentsDirectory();
       }
       
-      final filePath = '${directory.path}/$fileName';
+      filePath = '${directory.path}/$fileName';
       final file = File(filePath);
       await file.writeAsBytes(bytes);
       
-      // Show success message with file path
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('PDF saved to: ${directory.path}'),
-          duration: const Duration(seconds: 3),
-          action: SnackBarAction(
-            label: 'Open',
-            onPressed: () => _openFile(filePath),
-          ),
-        ),
-      );
+      // Show success dialog with open option
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('PDF Generated'),
+              content: Text('File saved successfully to:\n${directory.path}'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await _openFile(filePath);
+                  },
+                  child: const Text('Open'),
+                ),
+              ],
+            );
+          },
+        );
+      }
       
       return true;
     } catch (e) {
       debugPrint('PDF save error: $e');
       return false;
     }
-  }
-
-  static Future<void> _openFile(String filePath) async {
+  }  static Future<void> _openFile(String filePath) async {
     try {
+      if (Platform.isAndroid) {
+        // Request necessary permissions
+        final status = await Permission.manageExternalStorage.status;
+        if (!status.isGranted) {
+          await Permission.manageExternalStorage.request();
+        }
+      }
+      
       final Uri fileUri = Uri.file(filePath);
+      final File file = File(filePath);
+      
+      if (!await file.exists()) {
+        debugPrint('File does not exist: $filePath');
+        return;
+      }
+      
+      debugPrint('Attempting to open file: $filePath');
+      
       if (await canLaunchUrl(fileUri)) {
-        await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+        final result = await launchUrl(
+          fileUri, 
+          mode: LaunchMode.externalApplication,
+        );
+        
+        debugPrint('Launch result: $result');
+      } else {
+        debugPrint('Could not launch file: $filePath (canLaunchUrl returned false)');
+        
+        // Fallback for Android using package:open_filex if available
+        try {
+          if (Platform.isAndroid) {
+            // This is a hypothetical call - would need the open_filex package
+            // await OpenFilex.open(filePath);
+            debugPrint('Attempted to use fallback method to open file');
+          }
+        } catch (fallbackError) {
+          debugPrint('Fallback file opening method failed: $fallbackError');
+        }
       }
     } catch (e) {
       debugPrint('Could not open file: $e');

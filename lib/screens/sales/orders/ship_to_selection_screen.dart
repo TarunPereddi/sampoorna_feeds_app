@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../../models/ship_to.dart';
 import '../../../services/api_service.dart';
+import 'add_ship_to_screen.dart'; // Import the new screen
 
 class ShipToSelectionScreen extends StatefulWidget {
   final String customerNo;
@@ -22,11 +23,9 @@ class ShipToSelectionScreen extends StatefulWidget {
 class _ShipToSelectionScreenState extends State<ShipToSelectionScreen> {
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
-  
-  List<ShipTo> _shipToAddresses = [];
+    List<ShipTo> _shipToAddresses = [];
   List<ShipTo> _filteredShipToAddresses = [];
   bool _isLoading = false;
-  bool _isAddingShipTo = false;
   
   @override
   void initState() {
@@ -192,172 +191,20 @@ class _ShipToSelectionScreenState extends State<ShipToSelectionScreen> {
       ),
     );
   }
-  
-  void _showAddShipToDialog() {
-    final TextEditingController codeController = TextEditingController();
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController addressController = TextEditingController();
-    final TextEditingController address2Controller = TextEditingController();
-    final TextEditingController cityController = TextEditingController();
-    final TextEditingController stateController = TextEditingController();
-    final TextEditingController postcodeController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Ship-To Address'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: codeController,
-                decoration: const InputDecoration(
-                  labelText: 'Code*',
-                  border: OutlineInputBorder(),
-                  helperText: 'Enter a unique code (e.g., MAIN, STORE1)',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Address',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: address2Controller,
-                decoration: const InputDecoration(
-                  labelText: 'Address 2',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: cityController,
-                decoration: const InputDecoration(
-                  labelText: 'City',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: stateController,
-                decoration: const InputDecoration(
-                  labelText: 'State',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: postcodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Post Code',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
+    void _showAddShipToDialog() {
+    // Navigate to the AddShipToScreen instead of showing a dialog
+    Navigator.push(
+      context, 
+      MaterialPageRoute(
+        builder: (context) => AddShipToScreen(
+          customerNo: widget.customerNo,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _isAddingShipTo ? null : () async {
-              // Validate required fields
-              if (codeController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Code field is required')),
-                );
-                return;
-              }
-
-              // Check if code already exists
-              final existingCode = _shipToAddresses.any((shipTo) => 
-                shipTo.code.toLowerCase() == codeController.text.toLowerCase());
-              
-              if (existingCode) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('This code already exists. Please use a unique code.'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              setState(() {
-                _isAddingShipTo = true;
-              });
-
-              // Prepare ship-to data for API
-              final shipToData = {
-                'Customer_No': widget.customerNo,
-                'Code': codeController.text.trim(),
-                'Name': nameController.text.trim(),
-                'Address': addressController.text.trim(),
-                'Address_2': address2Controller.text.trim(),
-                'State': stateController.text.trim(),
-                'City': cityController.text.trim(),
-                'Post_Code': postcodeController.text.trim(),
-              };
-
-              // Submit the data
-              try {
-                await _apiService.createShipToAddress(shipToData);
-                
-                // Refresh the list
-                await _loadShipToAddresses();
-                
-                Navigator.pop(context);
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Ship-to address added successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error adding ship-to address: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              } finally {
-                setState(() {
-                  _isAddingShipTo = false;
-                });
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF008000),
-              foregroundColor: Colors.white,
-            ),
-            child: _isAddingShipTo
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-        ],
       ),
-    );
+    ).then((newShipTo) {
+      // Refresh the list when we return
+      if (newShipTo != null) {
+        _loadShipToAddresses();
+      }
+    });
   }
 }
