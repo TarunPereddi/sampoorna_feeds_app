@@ -194,7 +194,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       right: 16,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [                          FloatingActionButton.extended(
+                        children: [
+                          FloatingActionButton.extended(
                             heroTag: 'generateInvoice',
                             onPressed: () {
                               _showDateRangeDialog(context, 'invoice');
@@ -892,7 +893,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                     color: const Color(0xFF2C5F2D),
                   ),
                   const SizedBox(width: 8),
-                  Text(reportType == 'invoice' ? 'Invoice' : 'Report'),
+                  Text(reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement'),
                 ],
               ),
               content: Column(
@@ -991,60 +992,87 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     );
   }
 
-  Future<void> _generateReport(String reportType, DateTime fromDate, DateTime toDate) async {    // Show loading dialog
+  void _showLoadingDialog(BuildContext context, String reportType) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Row(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(
-                width: 24, 
-                height: 24, 
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C5F2D)),
+              const CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C5F2D)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Generating ${reportType == 'invoice' ? 'Invoice' : 'Report'}...',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(width: 16),
-              Text('Generating ${reportType == 'invoice' ? 'Invoice' : 'Report'}...'),
+              const SizedBox(height: 8),
+              const Text(
+                'Please wait while we prepare your document.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
-          content: const Text('Please wait while we prepare your document.'),
         );
       },
     );
-      try {
-      String? base64String;
-      String fileName;
+  }
+
+  String _generateUniqueFileName(String reportType) {
+    final now = DateTime.now();
+    final dateFormatter = DateFormat('yyyyMMdd');
+    final timeFormatter = DateFormat('HHmmss');
+    
+    final date = dateFormatter.format(now);
+    final time = timeFormatter.format(now);
+    
+    final customerName = _customerDetails['Name']?.toString().replaceAll(' ', '_') ?? 'Customer';
+    
+    if (reportType == 'invoice') {
+      return 'Invoice_${customerName}_${widget.customerNo}_${date}_${time}.pdf';
+    } else {
+      return 'Statement_${customerName}_${widget.customerNo}_${date}_${time}.pdf';
+    }
+  }
+
+  Future<void> _generateReport(String reportType, DateTime fromDate, DateTime toDate) async {
+    // Show improved loading dialog
+    _showLoadingDialog(context, reportType);
       
-      // Create a variable to track if the dialog is showing
-      bool isDialogShowing = true;
-        if (reportType == 'invoice') {
+    try {
+      String? base64String;
+      
+      if (reportType == 'invoice') {
         base64String = await _apiService.getInvoiceReport(
           customerNo: widget.customerNo,
           fromDate: fromDate,
           toDate: toDate,
         );
-        fileName = 'Invoice_${widget.customerNo}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       } else {
         base64String = await _apiService.getCustomerStatementReport(
           customerNo: widget.customerNo,
           fromDate: fromDate,
           toDate: toDate,
         );
-        fileName = 'Statement_${widget.customerNo}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       }
       
-      // Close loading dialog if it's still showing
-      if (isDialogShowing && Navigator.canPop(context)) {
+      // Close loading dialog 
+      if (Navigator.canPop(context)) {
         Navigator.of(context, rootNavigator: true).pop();
-        isDialogShowing = false;
       }
       
       if (base64String == null || base64String.isEmpty) {
-        // Show no data dialog
         showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -1061,22 +1089,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           },
         );
         return;
-      }      // Save PDF to Downloads folder
+      }
+      
+      // Generate unique filename and save PDF
+      final fileName = _generateUniqueFileName(reportType);
       bool success = await PdfService.saveToDownloads(
         base64String: base64String,
         fileName: fileName,
         context: context,
       );
       
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${reportType == 'invoice' ? 'Invoice' : 'Statement'} saved to Downloads folder'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        // Show error if PDF couldn't be generated
+      if (!success) {
         showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -1093,7 +1116,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           },
         );
       }
-        } catch (e) {
+    } catch (e) {
       // Close loading dialog if still open
       if (Navigator.canPop(context)) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -1114,6 +1137,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             ],
           );
         },
-      );    }
+      );
+    }
   }
 }
