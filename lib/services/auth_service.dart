@@ -73,41 +73,35 @@ class AuthService extends ChangeNotifier {
           notifyListeners();
           return false;
         }
-      } catch (e) {
-        // If the sales-specific login API fails, fall back to the old method
-        // only for backward compatibility or testing purposes
-        if (password != 'admin') {
-          _error = 'Invalid password';
-          _isLoading = false;
-          notifyListeners();
-          return false;
+     } catch (e) {
+  // Extract error message without CorrelationId
+  String errorMessage = 'Login failed';
+  
+  // Try to parse the error message from the API response
+  final errorString = e.toString();
+  if (errorString.contains('"message"')) {
+    try {
+      // Extract message content between quotes
+      final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+      final match = messageRegex.firstMatch(errorString);
+      if (match != null && match.groupCount >= 1) {
+        String message = match.group(1)!;
+        // Remove CorrelationId and everything after it
+        if (message.contains('CorrelationId')) {
+          message = message.split('CorrelationId')[0].trim();
         }
-        
-        // Get the sales person by code
-        final response = await apiService.get('SalesPerson', 
-          queryParams: {'\$filter': "Code eq '$username'"});
-        
-        final salesPersons = response['value'] as List;
-        
-        if (salesPersons.isEmpty) {
-          _error = 'User not found';
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        }
-        
-        if (salesPersons[0]['Block'] == true) {
-          _error = 'User is blocked';
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        }
-        
-        _currentUser = SalesPerson.fromJson(salesPersons[0]);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      }        } catch (e) {
+        errorMessage = message;
+      }
+    } catch (_) {
+      // If parsing fails, use default message
+    }
+  }
+  
+  _error = errorMessage;
+  _isLoading = false;
+  notifyListeners();
+  return false;
+}        } catch (e) {
       // Extract error message without CorrelationId
       String errorMessage = 'Login failed';
       

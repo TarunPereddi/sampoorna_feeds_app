@@ -2,14 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../models/sales_person.dart';
 import '../../../screens/login/login_screen.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/navigation_service.dart';
+import '../../../utils/app_colors.dart';
+import '../../../widgets/error_dialog.dart';
 import '../orders/create_order_screen.dart';
-import '../profile/profile_screen.dart';
-import '../sales_shell.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,11 +17,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
-  final ApiService _apiService = ApiService();
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   List<dynamic> _recentOrders = [];
-  String? _errorMessage;
   bool _dataLoaded = false; // Track if data has been loaded
 
   // Dashboard metrics
@@ -50,22 +47,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       _dataLoaded = true;
     }
   }
-
-  Future<void> _loadDashboardData() async {
-    setState(() {
+  Future<void> _loadDashboardData() async {    setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final salesPerson = authService.currentUser;
-      
-      if (salesPerson == null) {
+        if (salesPerson == null) {
         setState(() {
-          _errorMessage = 'User not authenticated';
           _isLoading = false;
         });
+        if (mounted) {
+          ErrorDialog.showGenericError(
+            context,
+            message: 'User not authenticated',
+          );
+        }
         return;
       }
 
@@ -78,11 +76,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       setState(() {
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load dashboard data: $e';
+    } catch (e) {      setState(() {
         _isLoading = false;
       });
+        // Show error dialog instead of inline error
+      if (mounted) {
+        ErrorDialog.showGenericError(
+          context,
+          message: 'Failed to load dashboard data: ${e.toString()}',
+          onOk: _loadDashboardData,
+        );
+      }
     }
   }
 
@@ -201,22 +205,22 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               height: 30,
               width: 30,
             ),
-            const SizedBox(width: 12),
-            const Text(
+            const SizedBox(width: 12),            const Text(
               'Sampoorna Feeds',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: AppColors.white,
               ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF2C5F2D),
-        actions: [
-          // Profile Avatar Dropdown
+        backgroundColor: AppColors.primaryDark,
+        actions: [          // Profile Avatar Dropdown
           if (salesPerson != null)
-            PopupMenuButton<String>(              onSelected: (value) {
+            PopupMenuButton<String>(
+              offset: const Offset(0, 50), // Position dropdown below the avatar
+              onSelected: (value) {
                 if (value == 'profile') {
                   // Navigate to profile tab using NavigationService
                   NavigationService.navigateToTab(context, 4);
@@ -245,14 +249,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               child: Container(
                 margin: const EdgeInsets.all(8),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppColors.white,
                   radius: 18,
                   child: Text(
                     salesPerson.name.isNotEmpty 
                         ? salesPerson.name[0].toUpperCase()
                         : 'S',
                     style: const TextStyle(
-                      color: Color(0xFF2C5F2D),
+                      color: AppColors.primaryDark,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -270,95 +274,91 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
           ).then((_) {
             _loadDashboardData();
-          });
-        },
-        backgroundColor: const Color(0xFF008000),
-        child: const Icon(Icons.add, color: Colors.white),
+          });        },
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.add, color: AppColors.white),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
-        child: SafeArea(
+        onRefresh: _loadDashboardData,        child: SafeArea(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(_errorMessage!),
-                          ElevatedButton(
-                            onPressed: _loadDashboardData,
-                            child: const Text('Retry'),
+              ? const Center(child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                ))
+              : SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Welcome message
+                      if (salesPerson != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24.0),
+                          child: Text(
+                            'Welcome back, ${salesPerson.name}',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.grey900,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
-                        ],
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        ),
+
+                      // Dashboard Cards
+                      _buildDashboardCards(),
+
+                      const SizedBox(height: 32),
+
+                      // Recent Orders section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Welcome message
-                          if (salesPerson != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 24.0),
-                              child: Text(
-                                'Welcome back, ${salesPerson.name}',
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          Expanded(
+                            child: Text(
+                              'Recent Orders (48h)',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.grey900,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
+                              ).then((_) {
+                                _loadDashboardData();
+                              });
+                            },
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('New Order'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
                             ),
-
-                          // Dashboard Cards
-                          _buildDashboardCards(),
-
-                          const SizedBox(height: 32),
-
-                          // Recent Orders section
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Recent Orders (48h)',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const CreateOrderScreen()),
-                                  ).then((_) {
-                                    _loadDashboardData();
-                                  });
-                                },
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('New Order'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF008000),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
-                          const SizedBox(height: 16),
-
-                          // Orders list or empty state
-                          _recentOrders.isEmpty
-                              ? _buildEmptyOrdersState()
-                              : _buildOrdersList(),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 16),
+
+                      // Orders list or empty state
+                      _recentOrders.isEmpty
+                          ? _buildEmptyOrdersState()
+                          : _buildOrdersList(),
+                    ],
+                  ),
+                ),
         ),
       ),
     );
@@ -386,11 +386,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                   (route) => false,
-                );
-              },
+                );              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF008000),
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
               ),
               child: const Text('Logout'),
             ),
@@ -413,15 +412,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             spacing: 8,
             runSpacing: 8,
             alignment: WrapAlignment.spaceBetween,
-            children: [
-              // Customers Card
+            children: [              // Customers Card
               SizedBox(
                 width: cardWidth,
                 child: _buildCompactDashboardCard(
                   title: 'Customers',
                   count: _dashboardMetrics['customers']!,
                   icon: Icons.people,
-                  color: Colors.blue,
+                  color: AppColors.primary,
                   onTap: () {
                     // Navigate to the customers tab using NavigationService
                     NavigationService.navigateToTab(context, 2);
@@ -436,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   title: 'Pending Orders',
                   count: _dashboardMetrics['pendingApproval']!,
                   icon: Icons.pending_actions,
-                  color: Colors.orange,
+                  color: AppColors.statusPending,
                   onTap: () {
                     // Navigate to the orders tab with filter using NavigationService
                     NavigationService.navigateToTab(
@@ -455,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   title: 'Released Orders',
                   count: _dashboardMetrics['releasedOrders']!,
                   icon: Icons.check_circle,
-                  color: Colors.green,
+                  color: AppColors.statusReleased,
                   onTap: () {
                     // Navigate to the orders tab with filter using NavigationService
                     NavigationService.navigateToTab(
@@ -473,7 +471,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   title: 'Open Orders',
                   count: _dashboardMetrics['openOrders']!,
                   icon: Icons.receipt,
-                  color: Colors.purple,
+                  color: AppColors.statusOpen,
                   onTap: () {
                     // Navigate to the orders tab with filter using NavigationService
                     NavigationService.navigateToTab(
@@ -534,15 +532,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              FittedBox(
+              ),              FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   title,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: AppColors.grey600,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -552,14 +552,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
   // Method removed - now using direct navigation to SalesShell tabs
-
   Widget _buildEmptyOrdersState() {
     return Container(
       height: 200,
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: AppColors.grey100,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppColors.grey200),
       ),
       child: Center(
         child: Column(
@@ -568,23 +567,30 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             Icon(
               Icons.shopping_cart_outlined,
               size: 48,
-              color: Colors.grey.shade400,
+              color: AppColors.grey400,
             ),
             const SizedBox(height: 16),
             Text(
               'No recent orders found',
               style: TextStyle(
-                color: Colors.grey.shade700,
+                color: AppColors.grey700,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            Text(
-              'Orders from the last 48 hours will appear here',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 14,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Orders from the last 48 hours will appear here',
+                style: TextStyle(
+                  color: AppColors.grey500,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -645,12 +651,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                    children: [                      Text(
                         'Customer',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: AppColors.grey600,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -662,6 +667,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           fontWeight: FontWeight.w500,
                         ),
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                     ],
                   ),
@@ -669,12 +675,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                    children: [                      Text(
                         'Date',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: AppColors.grey600,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -691,12 +696,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
+                  children: [                    Text(
                       'Amount',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: AppColors.grey600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -717,15 +721,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
+              children: [                TextButton.icon(
                   onPressed: () {
                     _showOrderDetails(order);
                   },
                   icon: const Icon(Icons.visibility, size: 18),
                   label: const Text('View Details'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.blue,
+                    foregroundColor: AppColors.info,
                   ),
                 ),
               ],
@@ -735,25 +738,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       ),
     );
   }
-
   Widget _buildStatusChip(String status) {
     Color chipColor;
 
     switch (status) {
       case 'Completed':
-        chipColor = Colors.green;
+        chipColor = AppColors.statusCompleted;
         break;
       case 'Released':
-        chipColor = Colors.blue;
+        chipColor = AppColors.statusReleased;
         break;
       case 'Pending Approval':
-        chipColor = Colors.orange;
+        chipColor = AppColors.statusPending;
         break;
       case 'Open':
-        chipColor = Colors.purple;
+        chipColor = AppColors.statusOpen;
         break;
       default:
-        chipColor = Colors.grey;
+        chipColor = AppColors.statusDefault;
     }
 
     return Container(
@@ -770,6 +772,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
     );
   }
@@ -837,12 +841,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               Navigator.pop(context);
                               // Navigate to orders tab using NavigationService
                               NavigationService.navigateToTab(context, 1);
-                            },
-                            icon: const Icon(Icons.list, size: 18),
-                            label: const Text('View All Orders'),
+                            },                            icon: const Icon(Icons.list, size: 18),                            label: const Text('View All Orders'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF008000),
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                           ),

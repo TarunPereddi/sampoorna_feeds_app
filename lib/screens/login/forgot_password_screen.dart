@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_colors.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   final String initialUserID;
@@ -31,105 +32,130 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 360;
+    final isTablet = screenSize.width > 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Forgot Password'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.primaryDark,
+        foregroundColor: AppColors.white,
       ),
-      backgroundColor: const Color(0xFFE8F5E9), // Light green background
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Please enter your User ID and registered mobile number to recover your password',
-                  style: TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                
-                // User ID field
-                TextFormField(
-                  controller: _userIdController,
-                  decoration: InputDecoration(
-                    labelText: 'User ID',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.0),
+        child: Center(
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: isTablet ? 500 : double.infinity,
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(isTablet ? 32.0 : 24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Please enter your User ID and registered mobile number to recover your password',
+                      style: TextStyle(fontSize: isSmallScreen ? 14 : 16),
+                      textAlign: TextAlign.center,
                     ),
-                    prefixIcon: const Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your User ID';
-                    }
-                    return null;
-                  },
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Mobile number field
-                TextFormField(
-                  controller: _phoneNumberController,
-                  decoration: InputDecoration(
-                    labelText: 'Registered Mobile Number',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10.0),
+                    SizedBox(height: isSmallScreen ? 24 : 32),
+                    
+                    // User ID field
+                    TextFormField(
+                      controller: _userIdController,
+                      style: TextStyle(fontSize: isSmallScreen ? 14 : 16),
+                      decoration: InputDecoration(
+                        labelText: 'User ID',
+                        filled: true,
+                        fillColor: AppColors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10.0),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: isSmallScreen ? 12 : 16,
+                        ),
+                        prefixIcon: Icon(Icons.person, size: isSmallScreen ? 20 : 24),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your User ID';
+                        }
+                        return null;
+                      },
                     ),
-                    prefixIcon: const Icon(Icons.phone),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your registered mobile number';
-                    }
-                    return null;
-                  },
-                ),
-                
-                const SizedBox(height: 16),
-                  // We're showing dialogs for success and error messages instead of inline text
-                
-                const SizedBox(height: 16),
-                
-                // Submit button
-                SizedBox(
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleSubmit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                    
+                    SizedBox(height: isSmallScreen ? 12 : 16),
+                    
+                    // Mobile number field
+                    TextFormField(
+                      controller: _phoneNumberController,
+                      style: TextStyle(fontSize: isSmallScreen ? 14 : 16),
+                      decoration: InputDecoration(
+                        labelText: 'Registered Mobile Number',
+                        filled: true,
+                        fillColor: AppColors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10.0),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: isSmallScreen ? 12 : 16,
+                        ),
+                        prefixIcon: Icon(Icons.phone, size: isSmallScreen ? 20 : 24),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your registered mobile number';
+                        }
+                        return null;
+                      },
+                    ),
+                    
+                    SizedBox(height: isSmallScreen ? 24 : 32),
+                    
+                    // Submit button
+                    SizedBox(
+                      height: isSmallScreen ? 45 : 50,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: _isLoading
+                          ? SizedBox(
+                              height: isSmallScreen ? 20 : 24,
+                              width: isSmallScreen ? 20 : 24,
+                              child: CircularProgressIndicator(
+                                color: AppColors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              'Reset Password',
+                              style: TextStyle(fontSize: isSmallScreen ? 14 : 16),
+                            ),
                       ),
                     ),
-                    child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Reset Password',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),    );
+      ),
+    );
   }
-  
-  Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) {
+    Future<void> _handleSubmit() async {
+    if (_formKey.currentState?.validate() != true) {
       return;
     }
 
@@ -159,7 +185,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             return AlertDialog(
               title: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Theme.of(context).primaryColor),
+                  Icon(Icons.check_circle, color: AppColors.success),
                   const SizedBox(width: 8),
                   const Text('Success'),
                 ],
@@ -191,7 +217,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             return AlertDialog(
               title: const Row(
                 children: [
-                  Icon(Icons.error_outline, color: Colors.red),
+                  Icon(Icons.error_outline, color: AppColors.error),
                   SizedBox(width: 8),
                   Text('Error'),
                 ],

@@ -1090,22 +1090,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         );
         return;
       }
-      
-      // Generate unique filename and save PDF
+        // Generate unique filename and save PDF
       final fileName = _generateUniqueFileName(reportType);
-      bool success = await PdfService.saveToDownloads(
+      String? savedFilePath = await PdfService.saveToDownloads(
         base64String: base64String,
         fileName: fileName,
         context: context,
       );
       
-      if (!success) {
+      if (savedFilePath == null) {
         showDialog(
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
               title: const Text('Error'),
-              content: Text('Failed to generate ${reportType}. Invalid data received.'),
+              content: Text('Failed to save ${reportType}. Please try again.'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),

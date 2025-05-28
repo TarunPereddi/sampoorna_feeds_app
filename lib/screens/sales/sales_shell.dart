@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../utils/app_colors.dart';
 import 'home/home_screen.dart';
 import 'orders/orders_screen_fixed.dart';  // Using our optimized screen
 import 'customers/customers_screen.dart';
@@ -101,103 +102,122 @@ class _SalesShellState extends State<SalesShell> {
               return false;
             }
             return true;
-          },          child: Scaffold(
-            body: Stack(
+          },          child: Scaffold(            body: Stack(
               children: [
                 // Home Tab - Only initialize when selected
                 Offstage(
                   offstage: _selectedIndex != 0,
-                  child: _navigatorKeys[0].currentState == null && _selectedIndex != 0
-                      ? Container() // Don't build if not visible and not initialized
-                      : _buildTabNavigator(
-                          0,
-                          (context) => const HomeScreen(),
-                        ),
+                  child: RepaintBoundary(
+                    child: _navigatorKeys[0].currentState == null && _selectedIndex != 0
+                        ? Container() // Don't build if not visible and not initialized
+                        : _buildTabNavigator(
+                            0,
+                            (context) => const HomeScreen(),
+                          ),
+                  ),
                 ),
 
                 // Orders Tab
                 Offstage(
-                  offstage: _selectedIndex != 1,                  child: _navigatorKeys[1].currentState == null && _selectedIndex != 1
-                      ? Container() // Don't build if not visible and not initialized
-                      : _buildTabNavigator(
-                          1,
-                          (context) => const OrdersScreenFixed(),
-                        ),
+                  offstage: _selectedIndex != 1,
+                  child: RepaintBoundary(
+                    child: _navigatorKeys[1].currentState == null && _selectedIndex != 1
+                        ? Container() // Don't build if not visible and not initialized
+                        : _buildTabNavigator(
+                            1,
+                            (context) => const OrdersScreenFixed(),
+                          ),
+                  ),
                 ),
 
                 // Customers Tab
                 Offstage(
                   offstage: _selectedIndex != 2,
-                  child: _navigatorKeys[2].currentState == null && _selectedIndex != 2
-                      ? Container() // Don't build if not visible and not initialized
-                      : _buildTabNavigator(
-                          2,
-                          (context) => const CustomersScreen(),
-                        ),
+                  child: RepaintBoundary(
+                    child: _navigatorKeys[2].currentState == null && _selectedIndex != 2
+                        ? Container() // Don't build if not visible and not initialized
+                        : _buildTabNavigator(
+                            2,
+                            (context) => const CustomersScreen(),
+                          ),
+                  ),
                 ),
 
                 // Queries Tab
                 Offstage(
                   offstage: _selectedIndex != 3,
-                  child: _navigatorKeys[3].currentState == null && _selectedIndex != 3
-                      ? Container() // Don't build if not visible and not initialized
-                      : _buildTabNavigator(
-                          3,
-                          (context) => const QueriesScreen(),
-                        ),
+                  child: RepaintBoundary(
+                    child: _navigatorKeys[3].currentState == null && _selectedIndex != 3
+                        ? Container() // Don't build if not visible and not initialized
+                        : _buildTabNavigator(
+                            3,
+                            (context) => const QueriesScreen(),
+                          ),
+                  ),
                 ),
 
                 // Profile Tab
                 Offstage(
                   offstage: _selectedIndex != 4,
-                  child: _navigatorKeys[4].currentState == null && _selectedIndex != 4
-                      ? Container() // Don't build if not visible and not initialized
-                      : _buildTabNavigator(
-                          4,
-                          (context) => const ProfileScreen(),
-                        ),
+                  child: RepaintBoundary(
+                    child: _navigatorKeys[4].currentState == null && _selectedIndex != 4
+                        ? Container() // Don't build if not visible and not initialized
+                        : _buildTabNavigator(
+                            4,
+                            (context) => const ProfileScreen(),
+                          ),
+                  ),
                 ),
               ],
-            ),
-            bottomNavigationBar: BottomNavigationBar(
-              backgroundColor: const Color(0xFFE8F5E9),
-              selectedItemColor: const Color(0xFF2C5F2D),
-              unselectedItemColor: Colors.grey,
-              currentIndex: _selectedIndex,
-              type: BottomNavigationBarType.fixed,
-              onTap: (index) {
-                // If tapping on the already selected tab and can pop,
-                // pop to the root of that tab
-                if (index == _selectedIndex &&
-                    _navigatorKeys[index].currentState!.canPop()) {
-                  _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
-                } else {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                }
-              },              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.home),
-                  label: 'Home',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.shopping_cart),
-                  label: 'Orders',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_search),
-                  label: 'Customers',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.question_answer),
-                  label: 'Queries',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-              ],
+            ),            bottomNavigationBar: LayoutBuilder(
+              builder: (context, constraints) {
+                final isSmallScreen = constraints.maxWidth < 360;
+                
+                return BottomNavigationBar(
+                  backgroundColor: AppColors.primaryLight,
+                  selectedItemColor: AppColors.primaryDark,
+                  unselectedItemColor: AppColors.grey600,
+                  currentIndex: _selectedIndex,
+                  type: BottomNavigationBarType.fixed,
+                  selectedFontSize: isSmallScreen ? 11 : 12,
+                  unselectedFontSize: isSmallScreen ? 10 : 11,
+                  iconSize: isSmallScreen ? 20 : 24,
+                  onTap: (index) {
+                    // If tapping on the already selected tab and can pop,
+                    // pop to the root of that tab
+                    if (index == _selectedIndex &&
+                        _navigatorKeys[index].currentState?.canPop() == true) {
+                      _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
+                    } else {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    }
+                  },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.shopping_cart),
+                      label: 'Orders',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_search),
+                      label: 'Customers',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.question_answer),
+                      label: 'Queries',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: 'Profile',
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
