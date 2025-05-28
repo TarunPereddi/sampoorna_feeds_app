@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_colors.dart';
 import 'home/home_screen.dart';
-import 'orders/orders_screen_fixed.dart';  // Using our optimized screen
+import 'orders/orders_screen.dart';  // Using our optimized screen
 import 'customers/customers_screen.dart';
 import 'queries/queries_screen.dart';
 import 'profile/profile_screen.dart';

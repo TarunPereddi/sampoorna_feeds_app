@@ -290,16 +290,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       ],
     );
   }
-
   Widget _buildCustomerHeader() {
     // Format currency values for display
     final netChange = _customerDetails['Net_Change'] ?? 0.0;
     final formattedNetChange = _currencyFormat.format(netChange);
     
+    // Check if customer is blocked
+    final isBlocked = _customerDetails['Blocked'] != null && 
+                     _customerDetails['Blocked'].toString().trim().isNotEmpty;
+    
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF2C5F2D).withOpacity(0.9),
+        color: isBlocked 
+            ? Colors.red.shade700.withOpacity(0.9)
+            : const Color(0xFF2C5F2D).withOpacity(0.9),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -307,8 +312,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             offset: const Offset(0, 2),
           ),
         ],
-      ),
-      child: Row(
+      ),      child: Row(
         children: [
           // Avatar
           CircleAvatar(
@@ -318,35 +322,59 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               (_customerDetails['Name'] ?? 'NA').toString().isNotEmpty 
                   ? (_customerDetails['Name'] ?? 'NA').toString()[0].toUpperCase()
                   : 'NA',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2C5F2D),
+                color: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          
-          // Customer details
+            // Customer details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+              children: [                Text(
                   _customerDetails['Name'] ?? 'N/A',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'ID: ${_customerDetails['No'] ?? 'N/A'}',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'ID: ${_customerDetails['No'] ?? 'N/A'}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    // Blocked tag under ID
+                    if (isBlocked)
+                      Container(
+                        margin: const EdgeInsets.only(left: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'BLOCKED: ${_customerDetails['Blocked'].toString().toUpperCase()}',
+                          style: TextStyle(
+                            color: Colors.red.shade700,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -836,12 +864,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       postingDate,
                       style: const TextStyle(fontSize: 13),
                     ),
-                  ),
-                  Expanded(
+                  ),                  Expanded(
                     flex: 3,
                     child: Text(
                       documentNo,
                       style: const TextStyle(fontSize: 13),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Expanded(
@@ -882,8 +911,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
+      builder: (BuildContext dialogContext) {        return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
               title: Row(
@@ -891,98 +919,128 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                   Icon(
                     reportType == 'invoice' ? Icons.receipt_long : Icons.summarize,
                     color: const Color(0xFF2C5F2D),
+                    size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Text(reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // From Date Picker
-                  InkWell(
-                    onTap: () async {
-                      final DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: fromDate ?? DateTime.now().subtract(const Duration(days: 30)),
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          fromDate = picked;
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(fromDate != null 
-                            ? DateFormat('dd/MM/yyyy').format(fromDate!)
-                            : 'From Date'),
-                          const Icon(Icons.calendar_today),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // To Date Picker
-                  InkWell(
-                    onTap: () async {
-                      final DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: toDate ?? DateTime.now(),
-                        firstDate: fromDate ?? DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          toDate = picked;
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(toDate != null 
-                            ? DateFormat('dd/MM/yyyy').format(toDate!)
-                            : 'To Date'),
-                          const Icon(Icons.calendar_today),
-                        ],
-                      ),
+                  Expanded(
+                    child: Text(
+                      reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement',
+                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
+              contentPadding: const EdgeInsets.fromLTRB(24.0, 16.0, 24.0, 0.0),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.85,
                 ),
-                ElevatedButton(
-                  onPressed: (fromDate != null && toDate != null)
-                      ? () {
-                          Navigator.pop(dialogContext);
-                          _generateReport(reportType, fromDate!, toDate!);
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C5F2D),
+                child: IntrinsicHeight(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // From Date Picker
+                      InkWell(
+                        onTap: () async {
+                          final DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: fromDate ?? DateTime.now().subtract(const Duration(days: 30)),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              fromDate = picked;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  fromDate != null 
+                                    ? DateFormat('dd/MM/yyyy').format(fromDate!)
+                                    : 'From Date',
+                                  style: const TextStyle(fontSize: 15),
+                                ),
+                              ),
+                              const Icon(Icons.calendar_today, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // To Date Picker
+                      InkWell(
+                        onTap: () async {
+                          final DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: toDate ?? DateTime.now(),
+                            firstDate: fromDate ?? DateTime(2020),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              toDate = picked;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  toDate != null 
+                                    ? DateFormat('dd/MM/yyyy').format(toDate!)
+                                    : 'To Date',
+                                  style: const TextStyle(fontSize: 15),
+                                ),
+                              ),
+                              const Icon(Icons.calendar_today, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Text('Generate'),
+                ),
+              ),              actions: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: (fromDate != null && toDate != null)
+                          ? () {
+                              Navigator.pop(dialogContext);
+                              _generateReport(reportType, fromDate!, toDate!);
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C5F2D),
+                      ),
+                      child: const Text('Generate'),
+                    ),
+                  ],
                 ),
               ],
             );

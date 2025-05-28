@@ -247,20 +247,49 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
                               ),
                             );
                           }
-                          
-                          final customer = _customers[index];
+                            final customer = _customers[index];
                           final isSelected = widget.initialSelection != null && 
                                             widget.initialSelection!.no == customer.no;
+                          final isBlocked = customer.blocked != null && customer.blocked!.trim().isNotEmpty;
                           
                           return ListTile(
-                            title: Text(
-                              '${customer.no} - ${customer.name}',
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${customer.no} - ${customer.name}',
+                                    style: TextStyle(
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isBlocked ? Colors.red.shade700 : Colors.black,
+                                    ),
+                                  ),
+                                ),                                if (isBlocked)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade600,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'BLOCKED: ${customer.blocked!.toUpperCase()}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),                            subtitle: Text(
+                              'Balance: ₹${customer.balanceLcy.toStringAsFixed(2)}',
                               style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
                               ),
-                            ),
-                            subtitle: Text('Balance: ₹${customer.balanceLcy?.toStringAsFixed(2) ?? "0.00"}'),
-                            tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
+                            ),                            tileColor: isSelected 
+                                ? Colors.green.withOpacity(0.1) 
+                                : isBlocked 
+                                    ? Colors.red.withOpacity(0.05) 
+                                    : Colors.lightGreen.shade50,
                             onTap: () {
                               Navigator.pop(context, customer);
                             },

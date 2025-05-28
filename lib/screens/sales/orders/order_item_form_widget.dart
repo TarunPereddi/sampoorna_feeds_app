@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import '../../../models/item.dart';
 import '../../../models/item_unit_of_measure.dart'; // Import the new model
 import '../../../services/api_service.dart';
-import '../../../services/auth_service.dart';
-import 'searchable_dropdown.dart';
 import 'item_selection_screen.dart';
-import 'uom_selection_screen.dart';
 
 class OrderItemFormWidget extends StatefulWidget {
   final bool isSmallScreen;
@@ -51,20 +47,12 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   double _quantity = 0;
   double _mrp = 0;
   double _price = 0;
-  double _totalAmount = 0;
-
-  // Loading states
+  double _totalAmount = 0;  // Loading states
   bool _isLoadingItems = false;
-  bool _isLoadingUoM = false;
   bool _isLoadingPrice = false;
   
   // Control flags to prevent stack overflow
-  bool _isUomDialogOpen = false;
-  bool _skipPriceUpdate = false;
-
-  bool _isPriceAvailable = false;
-
-  // Fallback units of measure for when API doesn't return any units
+  bool _isUomDialogOpen = false;// Fallback units of measure for when API doesn't return any units
   final List<String> _fallbackUnitsOfMeasure = [
     'Bag',
     'Kg',
@@ -76,8 +64,8 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
     'Drum',
     'Pallet',
   ];
-
   // Items list
+  // ignore: unused_field
   List<Item> _items = [];
 
   // Units of measure
@@ -184,9 +172,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   // New method to fetch units of measure for a specific item
   Future<void> _fetchUnitsOfMeasure(String itemNo) async {
     if (itemNo.isEmpty) return;
-    
-    setState(() {
-      _isLoadingUoM = true;
+      setState(() {
       _itemUnitsOfMeasure = []; // Clear previous units
     });
     
@@ -213,11 +199,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
           newUnitOfMeasure = loadedUnits.first.code;
         }
       }
-      
-      // Set state once with all changes
+        // Set state once with all changes
       setState(() {
         _itemUnitsOfMeasure = loadedUnits;
-        _isLoadingUoM = false;
         if (newUnitOfMeasure != null && _selectedUnitOfMeasure == null) {
           _selectedUnitOfMeasure = newUnitOfMeasure;
         }
@@ -231,10 +215,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
           widget.customerPriceGroup!.isNotEmpty) {
         await _fetchSalesPrice();
       }
-      
-    } catch (e) {
+        } catch (e) {
       setState(() {
-        _isLoadingUoM = false;
+        // Handle error state
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -261,9 +244,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
 
       // Set default price as MRP initially
       _price = _mrp;
-      _priceController.text = _price.toString();
-
-      // Set default Unit of Measure from the item's sales unit of measure if available
+      _priceController.text = _price.toString();      // Set default Unit of Measure from the item's sales unit of measure if available
       if (item.salesUnitOfMeasure != null) {
         _selectedUnitOfMeasure = item.salesUnitOfMeasure;
       } else if (item.description.contains('KG BAG')) {
@@ -271,8 +252,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       } else {
         _selectedUnitOfMeasure = 'Kg';
       }
-
-      _isPriceAvailable = false;
     });
     
     // Calculate total if quantity is set
@@ -391,11 +370,8 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       debugPrint('Cannot fetch price: Missing required parameters');
       debugPrint('Item: ${_selectedItem?.no}, UoM: $_selectedUnitOfMeasure, Location: ${widget.locationCode}, PriceGroup: ${widget.customerPriceGroup}');
       return;
-    }
-
-    setState(() {
+    }    setState(() {
       _isLoadingPrice = true; // Start loading
-      _isPriceAvailable = false;
     });
 
     try {
@@ -425,9 +401,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
           newMrp = priceData['MRP'] is int
               ? (priceData['MRP'] as int).toDouble()
               : priceData['MRP'] as double;
-        }
-
-        setState(() {
+        }        setState(() {
           _price = newPrice;
           _priceController.text = _price.toString();
 
@@ -435,7 +409,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
           _mrpController.text = _mrp.toString();
 
           _isLoadingPrice = false;
-          _isPriceAvailable = true; // Set price as available
         });
 
         // Always recalculate after price changes, outside of setState
@@ -443,7 +416,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         // Price not available, but we'll continue with zero price
         setState(() {
           _isLoadingPrice = false;
-          _isPriceAvailable = true; // Still mark as available so we can proceed
           _price = 0;
           _priceController.text = '0.0';
           _mrp = 0;
@@ -464,7 +436,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
 
       setState(() {
         _isLoadingPrice = false;
-        _isPriceAvailable = true; // Set to true so we can continue
         _price = 0;
         _priceController.text = '0.0';
       });
@@ -560,63 +531,61 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
+  Widget build(BuildContext context) {    return Card(
       elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0),
         child: Form(
           key: _itemFormKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            children: [              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Add Items',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.info_outline),
+                    icon: const Icon(Icons.info_outline, size: 18),
                     tooltip: 'Item Information',
                     onPressed: () {
                       _showItemInfoDialog();
                     },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),              const Divider(),
+              const SizedBox(height: 12),
 
               // Check if location is selected
               if (widget.locationCode == null || widget.locationCode!.isEmpty || 
                 widget.customerPriceGroup == null || widget.customerPriceGroup!.isEmpty &&
-                  !widget.isEditMode)
-              Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.amber),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                        'Please select a customer and location in the order form to view available items',
-                        style: TextStyle(fontSize: 14),
+                  !widget.isEditMode)                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.amber, size: 18),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                          'Please select a customer and location in the order form to view available items',
+                          style: TextStyle(fontSize: 13),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
 
               if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
                 widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty || widget.isEditMode)
@@ -634,13 +603,12 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton.icon(
-                    onPressed: _addItemToOrder,
-                    icon: const Icon(Icons.add),
-                    label: const Text('ADD ITEM'),
+                    onPressed: _addItemToOrder,                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('ADD ITEM', style: TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2196F3),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -657,16 +625,15 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   Widget _buildSmallScreenLayout() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Item Selection
+      children: [        // Item Selection
         _isLoadingItems
             ? const Center(child: CircularProgressIndicator())
             : _buildItemSelection(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Unit of Measure
         _buildUomSelection(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Quantity
         _buildNumberField(
@@ -674,7 +641,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
           controller: _quantityController,
           required: true,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Price Fields in a single row
         Row(
@@ -688,7 +655,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 smallVersion: true,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             // Unit Price - now more compact
             Expanded(
               child: _buildReadOnlyField(
@@ -698,7 +665,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 smallVersion: true,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             // Total Amount
             Expanded(
               child: _buildReadOnlyField(
@@ -727,8 +694,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               child: _isLoadingItems
                   ? const Center(child: CircularProgressIndicator())
                   : _buildItemSelection(),
-            ),
-            const SizedBox(width: 16),
+            ),            const SizedBox(width: 12),
             // Unit of Measure
             Expanded(
               flex: 1,
@@ -736,7 +702,8 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             ),
           ],
         ),
-        const SizedBox(height: 16),        // Row 2: Quantity, MRP, Price, Total
+        const SizedBox(height: 12),
+        // Row 2: Quantity, MRP, Price, Total
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -749,7 +716,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 required: true,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             // MRP - now with smaller width
             Expanded(
               flex: 1,
@@ -759,7 +726,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 isLoading: _isLoadingPrice,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             // Unit Price - now with smaller width
             Expanded(
               flex: 1,
@@ -769,7 +736,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 isLoading: _isLoadingPrice,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             // Total Amount
             Expanded(
               flex: 1,
@@ -793,15 +760,14 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+      children: [        Text(
           required ? '$label*' : label,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 6), // Reduced spacing
+        const SizedBox(height: 6),
         Stack(
           children: [
             TextFormField(
@@ -810,15 +776,14 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-              ],
-              decoration: InputDecoration(
+              ],              decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(
                     color: Colors.grey.shade300,
                   ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14), // Reduced vertical padding
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                 filled: true,
                 fillColor: enabled ? Colors.white : Colors.grey.shade100,
                 prefixText: label == 'Total Amount' || label == 'MRP' || label == 'Unit Price' ? '₹' : null,
@@ -856,22 +821,20 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+      children: [        Text(
           label,
           style: TextStyle(
-            fontSize: smallVersion ? 12 : 14,
+            fontSize: smallVersion ? 11 : 13,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 4),
         Stack(
-          children: [
-            Container(
+          children: [            Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(
-                horizontal: 12, 
-                vertical: smallVersion ? 10 : 16
+                horizontal: 10, 
+                vertical: smallVersion ? 8 : 12
               ),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
@@ -883,7 +846,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                     ? '₹$value' 
                     : value,
                 style: TextStyle(
-                  fontSize: smallVersion ? 13 : 14,
+                  fontSize: smallVersion ? 12 : 13,
                 ),
               ),
             ),
@@ -941,15 +904,14 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   Widget _buildUomSelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: [        const Text(
           'Unit of Measure*',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         GestureDetector(
           onTap: () async {
             // Prevent stack overflow by blocking multiple operations
@@ -997,12 +959,11 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 await _fetchSalesPrice();
               }
             }
-          },
-          child: Container(
+          },          child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
@@ -1010,13 +971,20 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               children: [
                 Expanded(
                   child: _selectedUnitOfMeasure != null
-                      ? Text(_selectedUnitOfMeasure!)
+                      ? Text(
+                          _selectedUnitOfMeasure!,
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        )
                       : Text(
                           'Select unit...',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
                 ),
-                const Icon(Icons.arrow_drop_down),
+                const Icon(Icons.arrow_drop_down, size: 18),
               ],
             ),
           ),
@@ -1029,15 +997,14 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   Widget _buildItemSelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: [        const Text(
           'Item*',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         GestureDetector(
           onTap: () async {
             if (widget.locationCode == null || widget.locationCode!.isEmpty) {
@@ -1063,12 +1030,11 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               // Update the search controller for future reference
               _itemSearchController.text = selectedItem.description;
             }
-          },
-          child: Container(
+          },          child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
@@ -1076,13 +1042,21 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               children: [
                 Expanded(
                   child: _selectedItem != null
-                      ? Text('${_selectedItem!.no} - ${_selectedItem!.description}')
+                      ? Text(
+                          '${_selectedItem!.no} - ${_selectedItem!.description}',
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        )
                       : Text(
                           'Select item...',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
                 ),
-                const Icon(Icons.arrow_drop_down),
+                const Icon(Icons.arrow_drop_down, size: 18),
               ],
             ),
           ),

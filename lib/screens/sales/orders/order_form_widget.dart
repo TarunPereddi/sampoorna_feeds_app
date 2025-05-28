@@ -317,20 +317,18 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
             widget.onUpdate('orderDate', date);
           },
         ),
-        const SizedBox(height: 16),
-
-        // Customer Selection
+        const SizedBox(height: 16),        // Customer Selection
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Customer Name*',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             GestureDetector(
               onTap: () async {
                 // Navigate to customer selection screen
@@ -350,7 +348,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: Colors.grey.shade300,
@@ -361,19 +359,23 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      widget.orderData['customer'] != null
-                          ? widget.orderData['customer']
-                          : 'Select a customer',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        color: widget.orderData['customer'] != null 
-                          ? Colors.black 
-                          : Colors.grey.shade600,
+                    Expanded(
+                      child: Text(
+                        widget.orderData['customer'] != null
+                            ? widget.orderData['customer']
+                            : 'Select a customer',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: widget.orderData['customer'] != null 
+                            ? Colors.black 
+                            : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios, size: 16),
+                    const Icon(Icons.arrow_forward_ios, size: 14),
                   ],
                 ),
               ),
@@ -432,55 +434,71 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 },
               ),
             ),
-            const SizedBox(width: 16),
-            // Customer Selection
+            const SizedBox(width: 16),            // Customer Selection
             Expanded(
-              child: GestureDetector(
-                onTap: () async {
-                  // Navigate to customer selection screen
-                  final selectedCustomer = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CustomerSelectionScreen(
-                        initialSelection: widget.orderData['customer'] != null
-                            ? _getCustomerByName(widget.orderData['customer'])
-                            : null,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Customer Name*',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
-                  );
-
-                  if (selectedCustomer != null) {
-                    _handleCustomerChange(selectedCustomer);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.grey.shade300,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        widget.orderData['customer'] != null
-                            ? widget.orderData['customer']
-                            : 'Select a customer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          color: widget.orderData['customer'] != null 
-                            ? Colors.black 
-                            : Colors.grey.shade600,
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () async {
+                      // Navigate to customer selection screen
+                      final selectedCustomer = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CustomerSelectionScreen(
+                            initialSelection: widget.orderData['customer'] != null
+                                ? _getCustomerByName(widget.orderData['customer'])
+                                : null,
+                          ),
                         ),
+                      );
+
+                      if (selectedCustomer != null) {
+                        _handleCustomerChange(selectedCustomer);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.grey.shade300,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
                       ),
-                      const Icon(Icons.arrow_forward_ios, size: 16),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.orderData['customer'] != null
+                                  ? widget.orderData['customer']
+                                  : 'Select a customer',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                                color: widget.orderData['customer'] != null 
+                                  ? Colors.black 
+                                  : Colors.grey.shade600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 14),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
@@ -532,54 +550,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           ],
         ),
       ],
-    );
-  }
-
-  // Build a text field widget
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    bool enabled = true,
-    bool required = false,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-    void Function(String)? onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          required ? '$label*' : label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          enabled: enabled,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-              ),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            filled: true,
-            fillColor: enabled ? Colors.white : Colors.grey.shade100,
-          ),
-          validator: validator ?? (required
-              ? (value) => value == null || value.isEmpty ? 'This field is required' : null
-              : null),
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-
+    );  }
   // Build a date picker field
   Widget _buildDateField({
     required String label,
@@ -594,11 +565,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         Text(
           required ? '$label*' : label,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           readOnly: true,
@@ -609,10 +580,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
                 color: Colors.grey.shade300,
               ),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             filled: true,
             fillColor: Colors.white,
-            suffixIcon: const Icon(Icons.calendar_today, size: 20),
+            suffixIcon: const Icon(Icons.calendar_today, size: 18),
+            isDense: true,
           ),
           validator: required
               ? (value) => value == null || value.isEmpty ? 'This field is required' : null
@@ -655,46 +627,51 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
         if (required && controller.text.isEmpty)
         const Padding(
-          padding: EdgeInsets.only(top: 8.0, left: 12.0),
+          padding: EdgeInsets.only(top: 6.0, left: 10.0),
           child: Text(
             'This field is required',
             style: TextStyle(
               color: Colors.red,
-              fontSize: 12,
+              fontSize: 11,
             ),
           ),
         ),
       ],
     );
   }
-
-  // Build a display-only field for sale code (replaces the disabled text field)
+  // Build a compact label for sale code (converts from large field to small label)
   Widget _buildSaleCodeDisplay() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Customer Sale Code',
+          'Sale Code',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
+            color: Colors.grey,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.blue.shade200, width: 1),
           ),
-          child: Text(widget.orderData['saleCode'] ?? ''),
+          child: Text(
+            widget.orderData['saleCode'] ?? 'Not assigned',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.blue.shade700,
+            ),
+          ),
         ),
       ],
     );
   }
-
   // Build Ship To selection widget
   Widget _buildShipToSelection() {
     return Column(
@@ -703,11 +680,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         const Text(
           'Ship To Code*',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         GestureDetector(
           onTap: () async {
             // Check if customer is selected
@@ -747,9 +724,9 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           },
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
@@ -757,32 +734,44 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               children: [
                 Expanded(
                   child: widget.orderData['shipTo'] != null
-                      ? Text(widget.orderData['shipTo'].toString())
+                      ? Text(
+                          widget.orderData['shipTo'].toString(),
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        )
                       : Text(
                           'Select ship-to address...',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
                 ),
-                const Icon(Icons.arrow_drop_down),
+                const Icon(Icons.arrow_drop_down, size: 18),
               ],
             ),
           ),
-        ),
-        // Add New Ship-To button
+        ),        // Add New Ship-To button
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
             onPressed: () {
               _showAddShipToDialog();
             },
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Add New'),
+            icon: const Icon(Icons.add, size: 14),
+            label: const Text(
+              'Add New',
+              style: TextStyle(fontSize: 12),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
           ),
         ),
       ],
     );
   }
-
   // Build Location selection widget
   Widget _buildLocationSelection() {
     return Column(
@@ -791,11 +780,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         const Text(
           'Location*',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         GestureDetector(
           onTap: () async {
             // Find currently selected location
@@ -827,9 +816,9 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           },
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
@@ -837,13 +826,21 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               children: [
                 Expanded(
                   child: widget.orderData['location'] != null
-                      ? Text(widget.orderData['location'].toString())
+                      ? Text(
+                          widget.orderData['location'].toString(),
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        )
                       : Text(
                           'Select location...',
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
                 ),
-                const Icon(Icons.arrow_drop_down),
+                const Icon(Icons.arrow_drop_down, size: 18),
               ],
             ),
           ),

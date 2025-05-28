@@ -395,7 +395,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       });
     }
   }
-
   // Handle API errors with user-friendly messages
   String _getReadableErrorMessage(dynamic error) {
     String errorMessage = error.toString();
@@ -436,8 +435,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       return 'Invalid request. Please check your order details.';
     } else if (errorMessage.contains('401') || errorMessage.contains('403')) {
       return 'Authentication error. Please log in again.';
-    } else if (errorMessage.contains('500')) {
-      return 'Server error. Please try again later.';
+    } else if (errorMessage.contains('500') || errorMessage.contains('503')) {
+      return 'We are experiencing technical difficulties. Please try again in a few moments.';
     }
 
     // If no specific pattern is found, return a more user-friendly version of the error
@@ -681,7 +680,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       },
     );
   }
-
   // Show partial success dialog when some items failed to be added
   void _showPartialSuccessDialog(String orderNo, List<String> failedItems) {
     // Use try-catch to handle any widget tree issues
@@ -693,58 +691,78 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           return AlertDialog(
             title: Row(
               children: [
-                Icon(Icons.warning, color: Colors.orange, size: 28),
-                SizedBox(width: 8),
-                Text('Order Created With Issues'),
+                const Icon(Icons.warning, color: Colors.orange, size: 28),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Order Created With Issues',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Order Number: $orderNo', 
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 16),
-                  
-                  Text(
-                    'The order was created, but some items could not be added:',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  SizedBox(height: 8),
-                  
-                  // List failed items
-                  ...failedItems.map((item) => Padding(
-                    padding: EdgeInsets.only(bottom: 4.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('• ', style: TextStyle(color: Colors.red)),
-                        Expanded(child: Text(item, style: TextStyle(color: Colors.red))),
-                      ],
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Order Number: $orderNo', 
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    
+                    const Text(
+                      'The order was created, but some items could not be added:',
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
-                  )).toList(),
-                  
-                  SizedBox(height: 16),
-                  Text(
-                    'Please note the order number and contact support if needed.',
-                    style: TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    
+                    // List failed items
+                    ...failedItems.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Colors.red)),
+                          Expanded(
+                            child: Text(
+                              item, 
+                              style: const TextStyle(color: Colors.red),
+                              softWrap: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                    
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Please note the order number and contact support if needed.',
+                      style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
-              ElevatedButton(
-                child: Text('Close'),
-                onPressed: () {
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  child: const Text('Close'),
+                  onPressed: () {
       // First close the dialog, then go back to previous screen
       Navigator.of(context).pop(); // Close dialog
       // Use popUntil to go back to the correct screen (e.g. orders screen)
       Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
     },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -759,7 +777,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           SnackBar(
             content: Text('Order created with some issues. Order #: $orderNo'),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           ),
         );
       } catch (snackbarError) {
@@ -767,7 +785,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
     }
   }
-
   // Show error dialog when order creation fails
   void _showErrorDialog(String errorMessage) {
     try {
@@ -778,65 +795,86 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           return AlertDialog(
             title: Row(
               children: [
-                Icon(Icons.error_outline, color: Colors.red, size: 28),
-                SizedBox(width: 8),
-                Text('Order Submission Failed'),
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Order Submission Failed',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'We couldn\'t create your order due to the following error:',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  SizedBox(height: 16),
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'We couldn\'t create your order due to the following error:',
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    child: Text(
-                      errorMessage,
-                      style: TextStyle(color: Colors.red.shade800),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Text(
+                        errorMessage,
+                        style: TextStyle(color: Colors.red.shade800),
+                        softWrap: true,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'What to do next:',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  SizedBox(height: 8),
-                  Text('• Check your internet connection'),
-                  Text('• Verify all order details are correct'),
-                  Text('• Try again in a few moments'),
-                  Text('• Contact support if the issue persists'),
-                ],
+                    const SizedBox(height: 16),
+                    const Text(
+                      'What to do next:',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('• Check your internet connection'),
+                    const Text('• Verify all order details are correct'),
+                    const Text('• Try again in a few moments'),
+                    const Text('• Contact support if the issue persists'),
+                  ],
+                ),
               ),
             ),
             actions: [
-              TextButton(
-                child: Text('Try Again'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              ElevatedButton(
-                child: Text('Go Back'),
-                onPressed: () {
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      child: const Text('Try Again'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      child: const Text('Go Back'),
+                      onPressed: () {
       // First close the dialog, then go back to previous screen
       Navigator.of(context).pop(); // Close dialog
       // Use popUntil to go back to the correct screen (e.g. orders screen)
       Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
     },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           );
@@ -850,7 +888,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           SnackBar(
             content: Text('Failed to place order: $errorMessage'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           ),
         );
       } catch (snackbarError) {

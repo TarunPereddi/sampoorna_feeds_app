@@ -519,11 +519,10 @@ class ApiService {
     
     // Combine filters with 'and'
     queryParams['\$filter'] = filters.join(' and ');
+      // Log the query to debug
+    debugPrint('Customer search query: ${Uri.parse('$baseUrl/CustomerCard').replace(queryParameters: queryParams)}');
     
-    // Log the query to debug
-    debugPrint('Customer search query: ${Uri.parse('$baseUrl/CustomerList').replace(queryParameters: queryParams)}');
-    
-    final response = await get('CustomerList', queryParams: queryParams);
+    final response = await get('CustomerCard', queryParams: queryParams);
     
     // Extract total count from response
     final totalCount = response['@odata.count'] as int? ?? 0;
@@ -681,10 +680,9 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     
     try {
       // Build a filter with OR conditions for each customer number
-      final customerNoFilters = customerNos.map((no) => "No eq '$no'").join(' or ');
-      final response = await get('CustomerCard', queryParams: {
+      final customerNoFilters = customerNos.map((no) => "No eq '$no'").join(' or ');      final response = await get('CustomerCard', queryParams: {
         '\$filter': customerNoFilters,
-        '\$select': 'No,E_Mail', // Only select No and E_Mail fields
+        '\$select': 'No,E_Mail,Blocked', // Select No, E_Mail and Blocked fields
       });
 
       if (response.containsKey('value') && response['value'] is List) {
