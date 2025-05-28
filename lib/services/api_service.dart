@@ -95,6 +95,57 @@ class ApiService {
     }
   }
 
+  // Reset password with old and new password
+  Future<Map<String, dynamic>> resetPassword({
+    required String userId,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await post(
+        'API_ResetPassword',
+        body: {
+          'userID': userId,
+          'oldPassword': oldPassword,
+          'newPassword': newPassword,
+        },
+      );
+      
+      return {
+        'success': true,
+        'message': response['value'] ?? 'Password reset successfully',
+      };
+    } catch (e) {
+      debugPrint('Error resetting password: $e');
+      
+      // Extract only the meaningful part of the error message
+      String errorMessage = 'Password reset failed';
+      
+      final errorString = e.toString();
+      if (errorString.contains('"message"')) {
+        try {
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorString);
+          if (match != null && match.groupCount >= 1) {
+            String message = match.group(1)!;
+            // Remove CorrelationId and everything after it
+            if (message.contains('CorrelationId')) {
+              message = message.split('CorrelationId')[0].trim();
+            }
+            errorMessage = message;
+          }
+        } catch (_) {
+          // If parsing fails, use default message
+        }
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
   // Get sales person information
   Future<List<dynamic>> getSalesPersons({String? code}) async {
     Map<String, String>? queryParams;

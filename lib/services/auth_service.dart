@@ -189,6 +189,42 @@ class AuthService extends ChangeNotifier {
     }
   }
   
+  Future<ForgotPasswordResult> resetPassword({
+    required String userId,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+      
+      final ApiService apiService = ApiService();
+      
+      final result = await apiService.resetPassword(
+        userId: userId,
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+      );
+      
+      _isLoading = false;
+      notifyListeners();
+      
+      return ForgotPasswordResult(
+        success: result['success'],
+        message: result['message'],
+      );
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      
+      return ForgotPasswordResult(
+        success: false,
+        message: e.toString().replaceAll("Exception: ", ""),
+      );
+    }
+  }
+  
   void logout() {
     _currentUser = null;
     notifyListeners();

@@ -16,7 +16,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
-  bool _isResettingPassword = false;
   String? _errorMessage;
   Map<String, dynamic>? _salesPersonDetails;
 
@@ -134,173 +133,145 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return RefreshIndicator(
       onRefresh: _loadProfileData,
       color: AppColors.primary,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-                maxWidth: isTablet ? 600 : double.infinity,
-              ),
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(isTablet ? 24.0 : 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Profile header
-                      _buildProfileHeader(salesPerson, isTablet),
-                      
-                      SizedBox(height: isTablet ? 32 : 24),
-                      
-                      // Action buttons section
-                      _buildActionButtons(salesPerson, isTablet),
-                      
-                      SizedBox(height: isTablet ? 32 : 24),
-                      
-                      // Profile details card
-                      _buildPersonalInfoCard(salesPerson, isTablet),
-                      
-                      SizedBox(height: isTablet ? 24 : 16),
-                      
-                      // Business Information card
-                      _buildBusinessInfoCard(salesPerson, isTablet),
-                      
-                      SizedBox(height: isTablet ? 32 : 24),
-                      
-                      // Logout button
-                      _buildLogoutButton(isTablet),
-                      
-                      SizedBox(height: isTablet ? 32 : 24),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(isTablet ? 24.0 : 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Compact Profile header
+            _buildCompactProfileHeader(salesPerson, isTablet),
+            
+            const SizedBox(height: 16),
+            
+            // Personal Information card
+            _buildPersonalInfoCard(salesPerson, isTablet),
+            
+            const SizedBox(height: 12),
+            
+            // Business Information card
+            _buildBusinessInfoCard(salesPerson, isTablet),
+            
+            const SizedBox(height: 20),
+            
+            // Action buttons section - Reset Password and Logout
+            _buildActionButtons(salesPerson, isTablet),
+            
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProfileHeader(Map<String, dynamic> salesPerson, bool isTablet) {
+  // Add this new method for compact header
+  Widget _buildCompactProfileHeader(Map<String, dynamic> salesPerson, bool isTablet) {
     return Card(
-      elevation: 3,
+      elevation: 2,
       shadowColor: AppColors.grey300,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.primary.withOpacity(0.05),
-              AppColors.primaryLight,
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(isTablet ? 32.0 : 24.0),
-          child: Column(
-            children: [
-              // Profile picture with status indicator
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: isTablet ? 60 : 50,
-                    backgroundColor: AppColors.primary.withOpacity(0.2),
-                    child: Text(
-                      (salesPerson['Name'] != null && salesPerson['Name'].toString().isNotEmpty) 
-                          ? salesPerson['Name'].toString()[0].toUpperCase() 
-                          : 'U',
-                      style: TextStyle(
-                        fontSize: isTablet ? 48 : 40,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            // Profile picture with status indicator
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: AppColors.primary.withOpacity(0.2),
+                  child: Text(
+                    (salesPerson['Name'] != null && salesPerson['Name'].toString().isNotEmpty) 
+                        ? salesPerson['Name'].toString()[0].toUpperCase() 
+                        : 'U',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
                     ),
                   ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: salesPerson['Block'] == true ? AppColors.error : AppColors.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.white, width: 2),
-                      ),
-                      child: Icon(
-                        salesPerson['Block'] == true ? Icons.block : Icons.check_circle,
-                        color: AppColors.white,
-                        size: 16,
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: salesPerson['Block'] == true ? AppColors.error : AppColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.white, width: 2),
+                    ),
+                    child: Icon(
+                      salesPerson['Block'] == true ? Icons.block : Icons.check_circle,
+                      color: AppColors.white,
+                      size: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    salesPerson['Name'] ?? 'Unknown User',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.grey900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'ID: ${salesPerson['Code'] ?? ''}',
+                    style: TextStyle(
+                      color: AppColors.grey600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary, width: 1),
+                    ),
+                    child: Text(
+                      'Sales Person',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
                       ),
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: isTablet ? 20 : 16),
-              Text(
-                salesPerson['Name'] ?? 'Unknown User',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: isTablet ? 26 : 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.grey900,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'ID: ${salesPerson['Code'] ?? ''}',
-                style: TextStyle(
-                  color: AppColors.grey600,
-                  fontSize: isTablet ? 18 : 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primary, width: 1),
-                ),
-                child: Text(
-                  'Sales Person',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: isTablet ? 16 : 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  // Update the action buttons section
   Widget _buildActionButtons(Map<String, dynamic> salesPerson, bool isTablet) {
     return Row(
       children: [
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () => _showResetPasswordDialog(context, salesPerson),
-            icon: const Icon(Icons.lock_reset, size: 20),
+            icon: const Icon(Icons.lock_reset, size: 18),
             label: const Text('Reset Password'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.info,
               foregroundColor: AppColors.white,
-              padding: EdgeInsets.symmetric(
-                vertical: isTablet ? 16 : 14,
-                horizontal: isTablet ? 24 : 16,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               elevation: 2,
             ),
@@ -308,20 +279,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => _showEditProfileDialog(context),
-            icon: const Icon(Icons.edit, size: 20),
-            label: const Text('Edit Profile'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary, width: 1.5),
-              padding: EdgeInsets.symmetric(
-                vertical: isTablet ? 16 : 14,
-                horizontal: isTablet ? 24 : 16,
-              ),
+          child: ElevatedButton.icon(
+            onPressed: () => _showLogoutDialog(context),
+            icon: const Icon(Icons.logout, size: 18),
+            label: const Text('Logout'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
+              elevation: 2,
             ),
           ),
         ),
@@ -331,11 +300,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildPersonalInfoCard(Map<String, dynamic> salesPerson, bool isTablet) {
     return Card(
-      elevation: 2,
+      elevation: 1,
       shadowColor: AppColors.grey300,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -344,27 +313,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icon(
                   Icons.person,
                   color: AppColors.primary,
-                  size: isTablet ? 26 : 24,
+                  size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
+                const Text(
                   'Personal Information',
                   style: TextStyle(
-                    fontSize: isTablet ? 20 : 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.grey900,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Divider(color: AppColors.grey300, height: 1),
-            const SizedBox(height: 16),
-            _buildProfileDetailItem('Full Name', salesPerson['Name'] ?? 'N/A', Icons.badge, isTablet),
+            const SizedBox(height: 12),
+            _buildProfileDetailItem('Full Name', salesPerson['Name'] ?? 'N/A', Icons.badge),
             if (salesPerson['E_Mail'] != null && salesPerson['E_Mail'].toString().isNotEmpty)
-              _buildProfileDetailItem('Email', salesPerson['E_Mail'], Icons.email, isTablet),
+              _buildProfileDetailItem('Email', salesPerson['E_Mail'], Icons.email),
             if (salesPerson['Phone_No'] != null && salesPerson['Phone_No'].toString().isNotEmpty)
-              _buildProfileDetailItem('Phone', salesPerson['Phone_No'], Icons.phone, isTablet),
+              _buildProfileDetailItem('Phone', salesPerson['Phone_No'], Icons.phone),
           ],
         ),
       ),
@@ -373,11 +342,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildBusinessInfoCard(Map<String, dynamic> salesPerson, bool isTablet) {
     return Card(
-      elevation: 2,
+      elevation: 1,
       shadowColor: AppColors.grey300,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -386,46 +355,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icon(
                   Icons.business_center,
                   color: AppColors.primary,
-                  size: isTablet ? 26 : 24,
+                  size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
+                const Text(
                   'Business Information',
                   style: TextStyle(
-                    fontSize: isTablet ? 20 : 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.grey900,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Divider(color: AppColors.grey300, height: 1),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _buildProfileDetailItem(
               'Responsibility Center', 
               salesPerson['Responsibility_Center'] ?? 'N/A', 
-              Icons.work_outline, 
-              isTablet
+              Icons.work_outline,
             ),
             _buildProfileDetailItem(
               'Account Status', 
               salesPerson['Block'] == true ? 'Blocked' : 'Active', 
-              salesPerson['Block'] == true ? Icons.block : Icons.check_circle, 
-              isTablet,
+              salesPerson['Block'] == true ? Icons.block : Icons.check_circle,
               valueColor: salesPerson['Block'] == true ? AppColors.error : AppColors.success,
             ),
             _buildProfileDetailItem(
               'Commission %', 
               salesPerson['Commission_Percent']?.toString() ?? 'N/A', 
-              Icons.percent, 
-              isTablet
+              Icons.percent,
             ),
             _buildProfileDetailItem(
               'Location', 
               salesPerson['Location'] ?? 'N/A', 
-              Icons.location_on, 
-              isTablet
+              Icons.location_on,
             ),
           ],
         ),
@@ -436,18 +401,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileDetailItem(
     String label, 
     String value, 
-    IconData icon, 
-    bool isTablet, {
+    IconData icon, {
     Color? valueColor,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
-            size: isTablet ? 20 : 18,
+            size: 16,
             color: AppColors.grey600,
           ),
           const SizedBox(width: 12),
@@ -458,7 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: AppColors.grey700,
-                fontSize: isTablet ? 16 : 14,
+                fontSize: 13,
               ),
             ),
           ),
@@ -470,7 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 color: valueColor ?? AppColors.grey900,
-                fontSize: isTablet ? 16 : 14,
+                fontSize: 13,
               ),
             ),
           ),
@@ -479,239 +443,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildLogoutButton(bool isTablet) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => _showLogoutDialog(context),
-        icon: const Icon(Icons.logout, size: 20),
-        label: const Text('Logout'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.error,
-          foregroundColor: AppColors.white,
-          padding: EdgeInsets.symmetric(
-            vertical: isTablet ? 18 : 16,
-            horizontal: isTablet ? 32 : 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 2,
-        ),
-      ),
-    );
-  }
-
   void _showResetPasswordDialog(BuildContext context, Map<String, dynamic> salesPerson) {
-    final TextEditingController mobileController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.lock_reset, color: AppColors.info),
-                  const SizedBox(width: 8),
-                  const Text('Reset Password'),
-                ],
-              ),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Please enter your registered mobile number to reset your password.',
-                      style: TextStyle(
-                        color: AppColors.grey700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: mobileController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Mobile Number',
-                        hintText: 'Enter your registered mobile number',
-                        prefixIcon: Icon(Icons.phone, color: AppColors.primary),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: AppColors.primary, width: 2),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your mobile number';
-                        }
-                        if (value.length < 10) {
-                          return 'Please enter a valid mobile number';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: _isResettingPassword ? null : () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(color: AppColors.grey600),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: _isResettingPassword ? null : () async {
-                    if (formKey.currentState!.validate()) {
-                      setState(() {
-                        _isResettingPassword = true;
-                      });
-
-                      try {
-                        final authService = Provider.of<AuthService>(context, listen: false);
-                        final result = await authService.forgotPassword(
-                          salesPerson['Code'] ?? '',
-                          mobileController.text.trim(),
-                        );
-
-                        setState(() {
-                          _isResettingPassword = false;
-                        });
-
-                        Navigator.pop(context);
-
-                        // Show result dialog
-                        _showResetPasswordResultDialog(result);
-                      } catch (e) {
-                        setState(() {
-                          _isResettingPassword = false;
-                        });
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error: $e'),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.info,
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isResettingPassword
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            color: AppColors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text('Reset Password'),
-                ),
-              ],
-            );
+        return ResetPasswordDialog(
+          salesPerson: salesPerson,
+          apiService: _apiService,
+          onSuccess: (result) {
+            _showResetPasswordResultDialog(result);
           },
         );
       },
     );
   }
 
-  void _showResetPasswordResultDialog(dynamic result) {
+  void _showResetPasswordResultDialog(Map<String, dynamic> result) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
+        final bool success = result['success'] ?? false;
+        
+        return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          title: Row(
-            children: [
-              Icon(
-                result.success ? Icons.check_circle : Icons.error,
-                color: result.success ? AppColors.success : AppColors.error,
-              ),
-              const SizedBox(width: 8),
-              Text(result.success ? 'Success' : 'Error'),
-            ],
-          ),
-          content: Text(
-            result.message,
-            style: TextStyle(
-              color: AppColors.grey700,
-              fontSize: 14,
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: result.success ? AppColors.success : AppColors.error,
-                foregroundColor: AppColors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  success ? Icons.check_circle : Icons.error_outline,
+                  color: success ? AppColors.success : AppColors.error,
+                  size: 48,
                 ),
-              ),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showEditProfileDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.edit, color: AppColors.primary),
-              const SizedBox(width: 8),
-              const Text('Edit Profile'),
-            ],
-          ),
-          content: Text(
-            'Profile editing functionality will be available in the next update. You can currently reset your password using the Reset Password button.',
-            style: TextStyle(
-              color: AppColors.grey700,
-              fontSize: 14,
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 16),
+                Text(
+                  success ? 'Success' : 'Error',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              child: const Text('OK'),
+                const SizedBox(height: 8),
+                Text(
+                  result['message'] ?? (success ? 'Password reset successfully' : 'Failed to reset password'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.grey700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: success ? AppColors.success : AppColors.error,
+                      foregroundColor: AppColors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('OK'),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -771,5 +574,262 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       },
     );
+  }
+}
+
+class ResetPasswordDialog extends StatefulWidget {
+  final Map<String, dynamic> salesPerson;
+  final ApiService apiService;
+  final Function(Map<String, dynamic>) onSuccess;
+
+  const ResetPasswordDialog({
+    super.key,
+    required this.salesPerson,
+    required this.apiService,
+    required this.onSuccess,
+  });
+
+  @override
+  State<ResetPasswordDialog> createState() => _ResetPasswordDialogState();
+}
+
+class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
+  final formKey = GlobalKey<FormState>();
+  final oldPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+  bool obscureOldPassword = true;
+  bool obscureNewPassword = true;
+  bool obscureConfirmPassword = true;
+  bool isLoading = false;
+
+  @override
+  void dispose() {
+    oldPasswordController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: screenSize.width > 600 ? 400 : screenSize.width * 0.9,
+        constraints: BoxConstraints(
+          maxHeight: screenSize.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_reset, color: AppColors.info),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Reset Password',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppColors.grey300),
+            
+            // Scrollable Content
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Please enter your current password and new password.',
+                          style: TextStyle(
+                            color: AppColors.grey700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Old Password Field
+                        _buildPasswordField(
+                          controller: oldPasswordController,
+                          label: 'Current Password',
+                          hint: 'Enter your current password',
+                          obscureText: obscureOldPassword,
+                          onToggleVisibility: () {
+                            setState(() => obscureOldPassword = !obscureOldPassword);
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your current password';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // New Password Field
+                        _buildPasswordField(
+                          controller: newPasswordController,
+                          label: 'New Password',
+                          hint: 'Enter your new password',
+                          obscureText: obscureNewPassword,
+                          onToggleVisibility: () {
+                            setState(() => obscureNewPassword = !obscureNewPassword);
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your new password';
+                            }
+                            if (value.length < 6) {
+                              return 'Password must be at least 6 characters';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Confirm Password Field
+                        _buildPasswordField(
+                          controller: confirmPasswordController,
+                          label: 'Confirm New Password',
+                          hint: 'Confirm your new password',
+                          obscureText: obscureConfirmPassword,
+                          onToggleVisibility: () {
+                            setState(() => obscureConfirmPassword = !obscureConfirmPassword);
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please confirm your new password';
+                            }
+                            if (value != newPasswordController.text) {
+                              return 'Passwords do not match';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            
+            // Actions
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: isLoading ? null : () => Navigator.pop(context),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: AppColors.grey600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: isLoading ? null : _handleResetPassword,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.info,
+                      foregroundColor: AppColors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: isLoading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: AppColors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Reset Password'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required bool obscureText,
+    required VoidCallback onToggleVisibility,
+    required String? Function(String?) validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(Icons.lock_outline, color: AppColors.primary),
+        suffixIcon: IconButton(
+          icon: Icon(
+            obscureText ? Icons.visibility : Icons.visibility_off,
+          ),
+          onPressed: onToggleVisibility,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.primary, width: 2),
+        ),
+      ),
+      validator: validator,
+    );
+  }
+
+  Future<void> _handleResetPassword() async {
+    if (formKey.currentState!.validate()) {
+      setState(() => isLoading = true);
+
+      try {
+        final result = await widget.apiService.resetPassword(
+          userId: widget.salesPerson['Code'] ?? '',
+          oldPassword: oldPasswordController.text.trim(),
+          newPassword: newPasswordController.text.trim(),
+        );
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        widget.onSuccess(result);
+      } catch (e) {
+        setState(() => isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 }

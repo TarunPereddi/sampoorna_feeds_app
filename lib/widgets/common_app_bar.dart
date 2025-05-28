@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -11,9 +12,8 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: const Color(0xFF008000),
+  Widget build(BuildContext context) {    return AppBar(
+      backgroundColor: AppColors.primaryDark,
       title: Row(
         children: [
           Image.asset(
@@ -32,14 +32,7 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ],
       ),
-      actions: actions ?? [
-        IconButton(
-          icon: const Icon(Icons.search, color: Colors.white),
-          onPressed: () {
-            // Implement search functionality
-          },
-        ),
-      ],
+      actions: actions ?? [],
     );
   }
 
