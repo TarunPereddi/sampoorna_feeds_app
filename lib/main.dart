@@ -35,8 +35,7 @@ class SampoornaFeedsApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      initialRoute: '/',
-      routes: {
+      initialRoute: '/',      routes: {
         '/': (context) => const LoginScreen(),
         '/customer': (context) => const CustomerShell(),
         '/vendor': (context) => const VendorShell(),

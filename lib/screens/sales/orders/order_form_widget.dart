@@ -10,7 +10,6 @@ import '../../../services/auth_service.dart';
 import 'customer_selection_screen.dart';
 import 'ship_to_selection_screen.dart';
 import 'location_selection_screen.dart';
-import 'add_ship_to_screen.dart'; // Import the new screen
 
 class OrderFormWidget extends StatefulWidget {
   final Map<String, dynamic> orderData;
@@ -28,22 +27,18 @@ class OrderFormWidget extends StatefulWidget {
   State<OrderFormWidget> createState() => _OrderFormWidgetState();
 }
 
-class _OrderFormWidgetState extends State<OrderFormWidget> {
-  // Controllers
+class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
   final TextEditingController _orderDateController = TextEditingController();
-  final TextEditingController _deliveryDateController = TextEditingController();
   final TextEditingController _saleCodeController = TextEditingController();
   final TextEditingController _customerSearchController = TextEditingController();
 
   // API Service
   final ApiService _apiService = ApiService();
-
   // Data Lists
   List<Customer> _customers = [];
   List<ShipTo> _shipToLocations = [];
   List<Location> _locations = [];
   // Loading states
-  bool _isLoadingCustomers = false;
   bool _isLoadingShipTo = false;
   bool _isLoadingLocations = false;
 
@@ -52,15 +47,9 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
 
   @override
   void initState() {
-    super.initState();
-
-    // Initialize date controllers
+    super.initState();    // Initialize date controllers
     if (widget.orderData['orderDate'] != null) {
       _orderDateController.text = DateFormat('dd/MM/yyyy').format(widget.orderData['orderDate']);
-    }
-
-    if (widget.orderData['deliveryDate'] != null) {
-      _deliveryDateController.text = DateFormat('dd/MM/yyyy').format(widget.orderData['deliveryDate']);
     }
 
     _saleCodeController.text = widget.orderData['saleCode'] ?? '';
@@ -73,26 +62,32 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           _searchCustomers(_customerSearchController.text);
         }
       });
+    });    // Initial fetch of limited customers and locations with staggered delays
+    _fetchInitialCustomers();
+    
+    // Add delay before fetching locations to prevent API overload
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _fetchLocations();
+      }
     });
 
-    // Initial fetch of limited customers and locations
-    _fetchInitialCustomers();
-    _fetchLocations();
-
-    // If customer is already selected, fetch ship-to addresses
+    // If customer is already selected, fetch ship-to addresses with additional delay
     if (widget.orderData['customer'] != null) {
       // Find customer by name
       Customer? selectedCustomer = _getCustomerByName(widget.orderData['customer']);
       if (selectedCustomer != null) {
-        _fetchShipToAddresses(selectedCustomer.no);
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            _fetchShipToAddresses(selectedCustomer.no);
+          }
+        });
       }
     }
   }
-
   @override
   void dispose() {
     _orderDateController.dispose();
-    _deliveryDateController.dispose();
     _saleCodeController.dispose();
     _customerSearchController.dispose();
     _debounce?.cancel();
@@ -108,10 +103,12 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       // Generate sale code based on customer number
       final saleCode = 'SC-${customer.no}';
       _saleCodeController.text = saleCode;
-      widget.onUpdate('saleCode', saleCode);
-
-      // Fetch ship-to addresses for this customer
-      _fetchShipToAddresses(customer.no);
+      widget.onUpdate('saleCode', saleCode);      // Fetch ship-to addresses for this customer with delay to prevent 503 errors
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _fetchShipToAddresses(customer.no);
+        }
+      });
     } else {
       widget.onUpdate('customer', null);
       widget.onUpdate('customerNo', null);
@@ -138,12 +135,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       return null;
     }
   }
-
   Future<void> _fetchInitialCustomers() async {
-    setState(() {
-      _isLoadingCustomers = true;
-    });
-
     try {
       // Get the sales person code from auth service
       final authService = Provider.of<AuthService>(context, listen: false);
@@ -159,25 +151,16 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
-        _isLoadingCustomers = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingCustomers = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading customers: $e')),
-        );
+      });    } catch (e) {      if (mounted) {
+        // Only show error dialog for 400 errors with message key, ignore 503 errors
+        final String errorStr = e.toString();
+        if (errorStr.contains("400") && errorStr.contains("message") && !errorStr.contains("503")) {
+          _showErrorDialog('Error loading customers: $e');
+        }
       }
     }
   }
-
   Future<void> _searchCustomers(String query) async {
-    setState(() {
-      _isLoadingCustomers = true;
-    });
-
     try {
       // Get the sales person code from auth service
       final authService = Provider.of<AuthService>(context, listen: false);
@@ -193,16 +176,12 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
-        _isLoadingCustomers = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingCustomers = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error searching customers: $e')),
-        );
+      });    } catch (e) {      if (mounted) {
+        // Only show error dialog for 400 errors with message key, ignore 503 errors
+        final String errorStr = e.toString();
+        if (errorStr.contains("400") && errorStr.contains("message") && !errorStr.contains("503")) {
+          _showErrorDialog('Error searching customers: $e');
+        }
       }
     }
   }
@@ -219,14 +198,14 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         _shipToLocations = shipToData.map((json) => ShipTo.fromJson(json)).toList();
         _isLoadingShipTo = false;
       });
-    } catch (e) {
-      setState(() {
+    } catch (e) {      setState(() {
         _isLoadingShipTo = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading ship-to addresses: $e')),
-        );
+      });      if (mounted) {
+        // Only show error dialog for 400 errors with message key, ignore 503 errors
+        final String errorStr = e.toString();
+        if (errorStr.contains("400") && errorStr.contains("message") && !errorStr.contains("503")) {
+          _showErrorDialog('Error loading ship-to addresses: $e');
+        }
       }
     }
   }
@@ -258,16 +237,17 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
       setState(() {
         _locations = locationsData.map((json) => Location.fromJson(json)).toList();
         _isLoadingLocations = false;
-      });
-    } catch (e) {
+      });    } catch (e) {
       setState(() {
         _isLoadingLocations = false;
       });
-      // if (mounted) {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(content: Text('Error loading locations: $e')),
-      //   );
-      // }
+      if (mounted) {
+        // Only show error dialog for 400 errors with message key, ignore 503 errors
+        final String errorStr = e.toString();
+        if (errorStr.contains("400") && errorStr.contains("message") && !errorStr.contains("503")) {
+          _showErrorDialog('Error loading locations: $e');
+        }
+      }
     }
   }
   // _addShipToAddress method has been removed as it's no longer needed
@@ -300,33 +280,48 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
       ),
     );
-  }
-
-  // Layout for small screens (stacked)
+  }  // Layout for small screens (stacked)
   Widget _buildSmallScreenLayout() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Order Date
-        _buildDateField(
-          label: 'Order Date',
-          controller: _orderDateController,
-          required: true,
-          isCurrentDate: true,
-          onSelect: (date) {
-            widget.onUpdate('orderDate', date);
-          },
-        ),
-        const SizedBox(height: 16),        // Customer Selection
+        // Order Date only (non-editable, today's date)
+        _buildOrderDateDisplay(),
+        const SizedBox(height: 16),
+        
+        // Customer Selection
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Customer Name*',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+            // Customer Name with Sale Code beside it
+            Row(
+              children: [
+                const Text(
+                  'Customer Name*',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (widget.orderData['saleCode'] != null && widget.orderData['saleCode'].isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue.shade200, width: 1),
+                    ),
+                    child: Text(
+                      widget.orderData['saleCode'],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 6),
             GestureDetector(
@@ -384,22 +379,6 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
         const SizedBox(height: 16),
 
-        // Sale Code
-        _buildSaleCodeDisplay(),
-        const SizedBox(height: 16),
-
-        // Delivery Date
-        _buildDateField(
-          label: 'Request Del. Date',
-          controller: _deliveryDateController,
-          required: true,
-          isCurrentDate: false,
-          onSelect: (date) {
-            widget.onUpdate('deliveryDate', date);
-          },
-        ),
-        const SizedBox(height: 16),
-
         // Ship To
         _isLoadingShipTo
             ? const Center(child: CircularProgressIndicator())
@@ -417,34 +396,49 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
   // Layout for larger screens (grid)
   Widget _buildLargeScreenLayout() {
     return Column(
-      children: [
-        // Row 1: Order Date and Customer
+      children: [        // Row 1: Order Date and Customer
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order Date
+            // Order Date (non-editable, today's date)
             Expanded(
-              child: _buildDateField(
-                label: 'Order Date',
-                controller: _orderDateController,
-                required: true,
-                isCurrentDate: true,
-                onSelect: (date) {
-                  widget.onUpdate('orderDate', date);
-                },
-              ),
+              child: _buildOrderDateDisplay(),
             ),
-            const SizedBox(width: 16),            // Customer Selection
+            const SizedBox(width: 16),
+            // Customer Selection
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Customer Name*',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  // Customer Name with Sale Code beside it
+                  Row(
+                    children: [
+                      const Text(
+                        'Customer Name*',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (widget.orderData['saleCode'] != null && widget.orderData['saleCode'].isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.blue.shade200, width: 1),
+                          ),
+                          child: Text(
+                            widget.orderData['saleCode'],
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   GestureDetector(
@@ -505,32 +499,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
         const SizedBox(height: 16),
 
-        // Row 2: Sale Code and Delivery Date
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Sale Code
-            Expanded(
-              child: _buildSaleCodeDisplay(),
-            ),
-            const SizedBox(width: 16),
-            // Delivery Date
-            Expanded(
-              child: _buildDateField(
-                label: 'Request Del. Date',
-                controller: _deliveryDateController,
-                required: true,
-                isCurrentDate: false,
-                onSelect: (date) {
-                  widget.onUpdate('deliveryDate', date);
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Row 3: Ship To and Location
+        // Row 2: Ship To and Location
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -551,127 +520,64 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
       ],
     );  }
-  // Build a date picker field
-  Widget _buildDateField({
-    required String label,
-    required TextEditingController controller,
-    bool required = false,
-    bool isCurrentDate = false, // If true, date cannot be before today
-    required Function(DateTime) onSelect,
-  }) {
+  // Build order date display (non-editable, shows today's date)
+  Widget _buildOrderDateDisplay() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          required ? '$label*' : label,
-          style: const TextStyle(
+        const Text(
+          'Order Date*',
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          readOnly: true,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-              ),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            filled: true,
-            fillColor: Colors.white,
-            suffixIcon: const Icon(Icons.calendar_today, size: 18),
-            isDense: true,
-          ),
-          validator: required
-              ? (value) => value == null || value.isEmpty ? 'This field is required' : null
-              : null,
-          onTap: () async {
-            // Set minimum date based on isCurrentDate flag
-            final DateTime now = DateTime.now();
-            final DateTime minDate = isCurrentDate ? now : DateTime(2020);
-            
-            final DateTime? pickedDate = await showDatePicker(
-              context: context,
-              initialDate: isCurrentDate ? now : (widget.orderData['orderDate'] ?? now),
-              firstDate: minDate,
-              lastDate: DateTime(2030),
-            );
-
-            if (pickedDate != null) {
-              // For delivery date, ensure it's not before order date
-              if (!isCurrentDate && widget.orderData['orderDate'] != null) {
-                final orderDate = widget.orderData['orderDate'] as DateTime;
-                if (pickedDate.isBefore(orderDate)) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Delivery date cannot be before order date'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                  return;
-                }
-              }
-              
-              setState(() {
-                controller.text = DateFormat('dd/MM/yyyy').format(pickedDate);
-                onSelect(pickedDate);
-              });
-            }
-          },
-        ),
-        if (required && controller.text.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(top: 6.0, left: 10.0),
-          child: Text(
-            'This field is required',
-            style: TextStyle(
-              color: Colors.red,
-              fontSize: 11,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-  // Build a compact label for sale code (converts from large field to small label)
-  Widget _buildSaleCodeDisplay() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Sale Code',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey,
-          ),
-        ),
-        const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.blue.shade200, width: 1),
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey.shade100,
           ),
-          child: Text(
-            widget.orderData['saleCode'] ?? 'Not assigned',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.blue.shade700,
-            ),
+          child: Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 18, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
           ),
         ),
       ],
+    );  }
+
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
   }
+
   // Build Ship To selection widget
   Widget _buildShipToSelection() {
     return Column(
@@ -689,6 +595,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
           onTap: () async {
             // Check if customer is selected
             if (widget.orderData['customerNo'] == null) {
+              // Keep this snackbar as it's a UI validation, not an API error
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please select a customer first')),
               );
@@ -752,26 +659,11 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
               ],
             ),
           ),
-        ),        // Add New Ship-To button
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () {
-              _showAddShipToDialog();
-            },
-            icon: const Icon(Icons.add, size: 14),
-            label: const Text(
-              'Add New',
-              style: TextStyle(fontSize: 12),
-            ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-          ),
         ),
       ],
     );
   }
+
   // Build Location selection widget
   Widget _buildLocationSelection() {
     return Column(
@@ -847,37 +739,5 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {
         ),
       ],
     );
-  }
-  // Navigate to add ship-to screen
-  void _showAddShipToDialog() {
-    // Check if customer is selected
-    if (widget.orderData['customer'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a customer first')),
-      );
-      return;
-    }
-
-    Customer? selectedCustomer = _getCustomerByName(widget.orderData['customer']);
-    if (selectedCustomer == null) return;
-
-    // Navigate to the AddShipToScreen instead of showing a dialog
-    Navigator.push(
-      context, 
-      MaterialPageRoute(
-        builder: (context) => AddShipToScreen(
-          customerNo: selectedCustomer.no,
-        ),
-      ),
-    ).then((newShipTo) {
-      // If a new ship-to was added, refresh the list and select it
-      if (newShipTo != null && newShipTo is ShipTo) {
-        _fetchShipToAddresses(selectedCustomer.no);
-        
-        // Automatically select the new ship-to
-        widget.onUpdate('shipTo', newShipTo.name);
-        widget.onUpdate('shipToCode', newShipTo.code);
-      }
-    });
   }
 }

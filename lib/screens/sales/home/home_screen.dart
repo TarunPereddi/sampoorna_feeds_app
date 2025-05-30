@@ -9,6 +9,8 @@ import '../../../services/navigation_service.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/error_dialog.dart';
 import '../orders/create_order_screen.dart';
+import '../orders/order_list_view.dart'; // Added import
+import '../orders/order_table_view.dart'; // Added import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -96,14 +98,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       final now = DateTime.now();
       final twoDaysAgo = now.subtract(const Duration(hours: 48));
       
-      final orders = await _apiService.getSalesOrders(
+      final ordersData = await _apiService.getSalesOrders( // Renamed from 'orders' to 'ordersData'
         salesPersonName: salesPersonName,
         fromDate: twoDaysAgo,
         toDate: now,
-        limit: 10,
+        limit: 10, // Keep a limit for recent orders
+        // includeCount is not strictly necessary here if only displaying a few
       );
       
-      _recentOrders = orders;
+      // Ensure ordersData is a List before assigning
+      if (ordersData is List) {
+        _recentOrders = ordersData;
+      } else if (ordersData is Map && ordersData.containsKey('value') && ordersData['value'] is List) {
+        // Handle cases where API might return a map with 'value' key
+        _recentOrders = ordersData['value'];
+      } else {
+        print('Unexpected format for recent orders: $ordersData');
+        _recentOrders = []; // Default to empty list on unexpected format
+      }
     } catch (e) {
       print('Error loading recent orders: $e');
       _recentOrders = [];
@@ -113,12 +125,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   Future<void> _loadDashboardMetrics(String salesPersonCode, String salesPersonName) async {
     try {
       // Load customers count - use a safer approach with error handling
-      int customersCount = 0;
-      try {
+      int customersCount = 0;      try {
         final customersResult = await _apiService.getCustomersWithPagination(
           salesPersonCode: salesPersonCode,
           page: 1,
           pageSize: 1, // We only need the count
+          blockFilter: null, // No block filter for count
         );
         customersCount = customersResult.totalCount;
       } catch (e) {
@@ -355,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       // Orders list or empty state
                       _recentOrders.isEmpty
                           ? _buildEmptyOrdersState()
-                          : _buildOrdersList(),
+                          : _buildOrdersList(), // Modified to call the new _buildOrdersList
                     ],
                   ),
                 ),
@@ -599,295 +611,53 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  // Helper method to convert order data to the format expected by view widgets
+  List<Map<String, dynamic>> _convertOrdersToViewFormat(List<dynamic> orders) {
+    return orders.map((order) {
+      // Parse the amount properly
+      double amount = 0;
+      if (order['Amt_to_Customer'] != null) {
+        amount = order['Amt_to_Customer'] is double
+            ? order['Amt_to_Customer']
+            : double.tryParse(order['Amt_to_Customer'].toString()) ?? 0;
+      }
+      
+      // Parse dates
+      String dateStr = order['Order_Date'] != null 
+          ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order['Order_Date']))
+          : '';
+      
+      return {
+        'id': order['No'] as String? ?? 'N/A',
+        'customerName': order['Sell_to_Customer_Name'] ?? order['Sell_to_Customer_No'] ?? 'Unknown',
+        'date': dateStr,
+        'amount': '₹${amount.toStringAsFixed(0)}',
+        'status': order['Status'] as String? ?? 'Unknown',
+      };
+    }).toList();
+  }
+
   Widget _buildOrdersList() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _recentOrders.length,
-      itemBuilder: (context, index) {
-        final order = _recentOrders[index];
-        return _buildOrderCard(order);
-      },
-    );
-  }
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
 
-  Widget _buildOrderCard(dynamic order) {
-    final String orderId = order['No'] ?? '';
-    final String customerName = order['Sell_to_Customer_Name'] ?? '';
-    final String orderDate = order['Order_Date'] != null 
-        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order['Order_Date']))
-        : '';
-    final double amount = order['Amt_to_Customer'] != null 
-        ? (order['Amt_to_Customer'] is double 
-            ? order['Amt_to_Customer'] 
-            : double.tryParse(order['Amt_to_Customer'].toString()) ?? 0)
-        : 0;
-    final String status = order['Status'] ?? '';
+    final viewOrders = _convertOrdersToViewFormat(_recentOrders);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  orderId,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                _buildStatusChip(status),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [                      Text(
-                        'Customer',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.grey600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        customerName,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [                      Text(
-                        'Date',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.grey600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        orderDate,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [                    Text(
-                      'Amount',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.grey600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '₹${amount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [                TextButton.icon(
-                  onPressed: () {
-                    _showOrderDetails(order);
-                  },
-                  icon: const Icon(Icons.visibility, size: 18),
-                  label: const Text('View Details'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.info,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  Widget _buildStatusChip(String status) {
-    Color chipColor;
+    VoidCallback? refreshCallback = () => _loadDashboardData();
 
-    switch (status) {
-      case 'Completed':
-        chipColor = AppColors.statusCompleted;
-        break;
-      case 'Released':
-        chipColor = AppColors.statusReleased;
-        break;
-      case 'Pending Approval':
-        chipColor = AppColors.statusPending;
-        break;
-      case 'Open':
-        chipColor = AppColors.statusOpen;
-        break;
-      default:
-        chipColor = AppColors.statusDefault;
+    if (isSmallScreen) {
+      return OrderListView(
+        orders: viewOrders,
+        scrollController: ScrollController(), 
+        onRefresh: refreshCallback,
+        isNestedInScrollView: true, 
+      );
+    } else {
+      return OrderTableView(
+        orders: viewOrders,
+        scrollController: ScrollController(), 
+        onRefresh: refreshCallback,
+      );
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: chipColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: chipColor, width: 1),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: chipColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-      ),
-    );
-  }
-
-  void _showOrderDetails(dynamic order) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header with close button
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Order ${order['No']}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Status chip
-                    Center(child: _buildStatusChip(order['Status'] ?? '')),
-                    const SizedBox(height: 20),
-                    
-                    // Order details
-                    _buildOrderDetailItem('Customer', order['Sell_to_Customer_Name'] ?? ''),
-                    _buildOrderDetailItem('Order Date', order['Order_Date'] != null 
-                        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order['Order_Date']))
-                        : ''),
-                    _buildOrderDetailItem('Amount', '₹${order['Amt_to_Customer']?.toString() ?? '0'}'),
-                    _buildOrderDetailItem('Location', order['Location_Code'] ?? ''),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              // Navigate to orders tab using NavigationService
-                              NavigationService.navigateToTab(context, 1);
-                            },                            icon: const Icon(Icons.list, size: 18),                            label: const Text('View All Orders'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: AppColors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildOrderDetailItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

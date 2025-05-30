@@ -198,11 +198,10 @@ class ApiService {
     final now = DateTime.now();
     final twoDaysAgo = now.subtract(const Duration(days: 2));
     final formattedDate = "${twoDaysAgo.year}-${twoDaysAgo.month.toString().padLeft(2, '0')}-${twoDaysAgo.day.toString().padLeft(2, '0')}";
-    
-    final queryParams = {
+      final queryParams = {
       '\$filter': "Saels_Person_Name eq '$salesPersonName' and Order_Date ge $formattedDate",
       '\$top': limit.toString(),
-      '\$orderby': 'Order_Date desc'
+      '\$orderby': 'No desc' // Order by Order ID in descending order to show latest orders on top
     };
     
     final response = await get('SalesOrder', queryParams: queryParams);
@@ -215,10 +214,43 @@ class ApiService {
     final response = await get('ShiptoAddress', queryParams: queryParams);
     return response['value'];
   }
-  
-  // Create a new ship-to address
+    // Create a new ship-to address
   Future<dynamic> createShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('ShiptoAddress', body: shipToData);
+  }
+
+  // Create pincode entry (fire and forget - no response handling needed)
+  Future<void> createPinCode({
+    required String code,
+    required String city,
+  }) async {
+    final body = {
+      "Code": code,
+      "City": city,
+      "Country_Region_Code": "IN", // Hard-coded as requested
+    };
+    
+    debugPrint('Creating pincode entry: $body');
+    
+    try {
+      // Make the POST request but don't handle the response
+      await post('PinCode', body: body);
+      debugPrint('Pincode entry created successfully (response ignored as requested)');
+    } catch (e) {
+      debugPrint('Error creating pincode entry: $e');
+      // Don't rethrow - we don't care about the response as requested
+    }
+  }
+
+  // Get states for dropdown
+  Future<List<dynamic>> getStates() async {
+    try {
+      final response = await get('State');
+      return response['value'];
+    } catch (e) {
+      debugPrint('Error fetching states: $e');
+      return [];
+    }
   }
   
   // Get units of measurement for a specific item
@@ -341,12 +373,10 @@ class ApiService {
     bool includeCount = false,
   }) async {
     Map<String, String> queryParams = {};
-    List<String> filters = [];
-
-    // Add pagination
+    List<String> filters = [];    // Add pagination
     queryParams['\$top'] = limit.toString();
     queryParams['\$skip'] = offset.toString();
-    queryParams['\$orderby'] = 'Order_Date desc';
+    queryParams['\$orderby'] = 'No desc'; // Order by Order ID in descending order to show latest orders on top
     
     // Add count parameter if requested
     if (includeCount) {
@@ -412,14 +442,13 @@ class ApiService {
     return response['value'];
   }
   
-
   /// Creates a sales order header and returns the order details
   Future<Map<String, dynamic>> createSalesOrder({
   required String customerNo,
   required String shipToCode,
   required String locationCode,
   required String salesPersonCode,
-  required DateTime requestedDeliveryDate, // Changed to required
+  DateTime? requestedDeliveryDate, // Optional parameter
 }) async {
   // Create request body
   Map<String, dynamic> body = {
@@ -430,9 +459,10 @@ class ApiService {
     "Invoice_Type": "Bill of Supply",
     "created_from_web": true
   };
-  
-  // Format date as expected by API (yyyy-MM-dd)
-  String formattedDate = DateFormat('yyyy-MM-dd').format(requestedDeliveryDate);
+    // Format date as expected by API (yyyy-MM-dd)
+  // Use provided date or default to tomorrow
+  DateTime deliveryDate = requestedDeliveryDate ?? DateTime.now().add(const Duration(days: 1));
+  String formattedDate = DateFormat('yyyy-MM-dd').format(deliveryDate);
   body["Requested_Delivery_Date"] = formattedDate;
   
   debugPrint('Creating sales order: $body');
@@ -492,6 +522,7 @@ class ApiService {
   Future<PaginationResult<Customer>> getCustomersWithPagination({
     required String salesPersonCode,
     String? searchQuery,
+    String? blockFilter,
     required int page,
     required int pageSize,
   }) async {
@@ -515,6 +546,11 @@ class ApiService {
       // Add filters separately for better readability
       filters.add("Name eq '$wildcardSearch'");
       // filters.add("No eq '$wildcardSearch'");
+    }
+    
+    // Add block filter if provided
+    if (blockFilter != null && blockFilter.isNotEmpty) {
+      filters.add(blockFilter);
     }
     
     // Combine filters with 'and'
@@ -570,14 +606,37 @@ class ApiService {
         }
       }
       
-      return result;
-    } catch (e) {
+      return result;    } catch (e) {
       debugPrint('Error sending order for approval: $e');
+      
+      String errorMessage = e.toString();
+      
+      // Extract message from JSON error and remove CorrelationId
+      if (errorMessage.contains('"message"')) {
+        try {
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorMessage);
+          if (match != null && match.groupCount >= 1) {
+            errorMessage = match.group(1)!;
+          }
+        } catch (parseError) {
+          // If parsing fails, use original message
+        }
+      }
+      
+      // Remove CorrelationId and everything after it
+      if (errorMessage.contains('CorrelationId')) {
+        errorMessage = errorMessage.split('CorrelationId')[0].trim();
+        // Remove trailing period if present
+        if (errorMessage.endsWith('.')) {
+          errorMessage = errorMessage.substring(0, errorMessage.length - 1);
+        }
+      }
       
       // Create an error response
       return {
         'success': false,
-        'message': e.toString()
+        'message': errorMessage.isEmpty ? 'Failed to send order for approval' : errorMessage
       };
     }
   }
@@ -797,5 +856,51 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       debugPrint('Error fetching customer transactions: $e');
       return [];
     }
+  }
+
+  // Get items with pagination support
+  Future<PaginationResult<Map<String, dynamic>>> getItemsWithPagination({
+    required String locationCode,
+    String? searchQuery,
+    required int page,
+    required int pageSize,
+  }) async {
+    Map<String, String> queryParams = {
+      '\$count': 'true',
+      '\$top': pageSize.toString(),
+      '\$skip': ((page - 1) * pageSize).toString(),
+    };
+    
+    // Build filter string
+    List<String> filters = [];
+    
+    // Add location filter
+    filters.add("Item_Location eq '$locationCode'");
+    
+    // Add search filter if provided
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      // Use wildcard search based on API requirements
+      final wildcardSearch = "*$searchQuery*";
+      filters.add("(Description eq '$wildcardSearch')");
+    }
+    
+    // Combine filters with 'and'
+    queryParams['\$filter'] = filters.join(' and ');
+    
+    // Log the query for debugging
+    debugPrint('Item search query: ${Uri.parse('$baseUrl/ItemList').replace(queryParameters: queryParams)}');
+    
+    final response = await get('ItemList', queryParams: queryParams);
+    
+    // Extract total count from response
+    final totalCount = response['@odata.count'] as int? ?? 0;
+    
+    // Get items from response
+    final items = (response['value'] as List<dynamic>).cast<Map<String, dynamic>>();
+    
+    return PaginationResult<Map<String, dynamic>>(
+      items: items,
+      totalCount: totalCount,
+    );
   }
 }

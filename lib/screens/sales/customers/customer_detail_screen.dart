@@ -28,7 +28,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     locale: 'en_IN',
     symbol: '₹',
     decimalDigits: 2,
-  );  @override
+  );  
+  
+  @override
+  
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
@@ -214,7 +217,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                             backgroundColor: const Color(0xFF2C5F2D),
                             foregroundColor: Colors.white,
                             icon: const Icon(Icons.summarize),
-                            label: const Text('Report'),
+                            label: const Text('Statement'),
                           ),
                         ],
                       ),
@@ -801,7 +804,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               Expanded(
                 flex: 3,
                 child: Text(
-                  'Document No',
+                  'Document Type',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -850,7 +853,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             final postingDate = transaction['Posting_Date'] != null
                 ? DateFormat('dd/MM/yy').format(DateTime.parse(transaction['Posting_Date']))
                 : 'N/A';
-            final documentNo = transaction['Document_No'] ?? 'N/A';
+            final documentNo = transaction['Document_Type'] ?? 'N/A';
             final debitAmount = transaction['Debit_Amount'] ?? 0.0;
             final creditAmount = transaction['Credit_Amount'] ?? 0.0;
             
@@ -1065,7 +1068,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               ),
               const SizedBox(height: 20),
               Text(
-                'Generating ${reportType == 'invoice' ? 'Invoice' : 'Report'}...',
+                'Generating ${reportType == 'invoice' ? 'Invoice' : 'Statement'}...',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,

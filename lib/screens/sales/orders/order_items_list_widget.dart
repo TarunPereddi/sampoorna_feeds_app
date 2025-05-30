@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-class OrderItemsListWidget extends StatelessWidget {
-  final List<Map<String, dynamic>> items;
+class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dynamic>> items;
   final bool isSmallScreen;
   final Function(int) onRemoveItem;
   final VoidCallback onClearAll;
@@ -15,7 +15,6 @@ class OrderItemsListWidget extends StatelessWidget {
     required this.onClearAll,
     required this.totalAmount,
   });
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -67,7 +66,7 @@ class OrderItemsListWidget extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '₹${totalAmount.toStringAsFixed(2)}',
+                      _formatCurrency(totalAmount),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -81,6 +80,16 @@ class OrderItemsListWidget extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Helper method to format currency values
+  String _formatCurrency(double value) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return currencyFormat.format(value);
   }
 
   // Empty state widget
@@ -201,7 +210,7 @@ class OrderItemsListWidget extends StatelessWidget {
                             color: Colors.grey,
                           ),
                         ),
-                        Text('₹${(item['price'] as double).toStringAsFixed(2)}'),
+                        Text(_formatCurrency(item['price'] as double)),
                       ],
                     ),
                   ],
@@ -220,7 +229,7 @@ class OrderItemsListWidget extends StatelessWidget {
                             color: Colors.grey,
                           ),
                         ),
-                        Text('₹${(item['mrp'] as double).toStringAsFixed(2)}'),
+                        Text(_formatCurrency(item['mrp'] as double)),
                       ],
                     ),
                     Column(
@@ -232,9 +241,8 @@ class OrderItemsListWidget extends StatelessWidget {
                             fontSize: 12,
                             color: Colors.grey,
                           ),
-                        ),
-                        Text(
-                          '₹${(item['totalAmount'] as double).toStringAsFixed(2)}',
+                        ),                        Text(
+                          _formatCurrency(item['totalAmount'] as double),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                           ),
@@ -273,10 +281,9 @@ class OrderItemsListWidget extends StatelessWidget {
               DataCell(Text('${index + 1}')),
               DataCell(Text(item['itemNo'] as String)),
               DataCell(Text(item['unitOfMeasure'] as String)),
-              DataCell(Text(item['quantity'].toString())),
-              DataCell(Text('₹${(item['mrp'] as double).toStringAsFixed(2)}')),
-              DataCell(Text('₹${(item['price'] as double).toStringAsFixed(2)}')),
-              DataCell(Text('₹${(item['totalAmount'] as double).toStringAsFixed(2)}')),
+              DataCell(Text(item['quantity'].toString())),              DataCell(Text(_formatCurrency(item['mrp'] as double))),
+              DataCell(Text(_formatCurrency(item['price'] as double))),
+              DataCell(Text(_formatCurrency(item['totalAmount'] as double))),
               DataCell(
                 item['cannotDelete'] == true
                 ? Tooltip(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import '../../../models/location.dart';
+import '../../../utils/app_colors.dart';
 
 class LocationSelectionScreen extends StatefulWidget {
   final List<Location> locations;
@@ -59,21 +59,25 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
       }
     });
   }
-  
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Select Location'),
-        backgroundColor: const Color(0xFF008000),
+        title: const Text(
+          'Select Location',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: AppColors.primaryDark,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
           // Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
+            child: TextField(              controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search locations...',
                 prefixIcon: const Icon(Icons.search),
@@ -96,11 +100,8 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
           // Location List
           Expanded(
             child: _filteredLocations.isEmpty
-                ? Center(
-                    child: Text(
-                      'No locations found',
-                      style: TextStyle(color: Colors.grey.shade700),
-                    ),
+                ? const Center(
+                    child: Text('No locations found'),
                   )
                 : ListView.builder(
                     itemCount: _filteredLocations.length,

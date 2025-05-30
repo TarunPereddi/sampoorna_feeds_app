@@ -11,7 +11,9 @@ import 'order_table_view.dart';
 /// An optimized version of OrdersScreen that uses lazy loading
 /// to prevent API calls until the tab is actually viewed by the user
 class OrdersScreenFixed extends StatefulWidget {
-  const OrdersScreenFixed({super.key});
+  final String? initialStatus;
+  
+  const OrdersScreenFixed({super.key, this.initialStatus});
 
   @override
   State<OrdersScreenFixed> createState() => _OrdersScreenFixedState();
@@ -67,31 +69,60 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
     // Add listener to tab controller to reload data when tab changes
     _tabController.addListener(_onTabChanged);
     
-    // We'll load data when the widget becomes visible
+    // Handle initial status if provided directly
+    if (widget.initialStatus != null) {
+      _setInitialStatus(widget.initialStatus!);
+    }
   }
   
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     
-    // Check for initial status from route arguments
+    // Check for initial status from route arguments (higher priority)
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final initialStatus = args?['initialStatus'] as String?;
+    final routeInitialStatus = args?['initialStatus'] as String?;
     
-    if (initialStatus != null) {
-      final statusIndex = _statusTabs.indexWhere((tab) => tab == initialStatus);
-      if (statusIndex != -1) {
-        setState(() {
-          _selectedStatus = initialStatus;
-        });
-        _tabController.animateTo(statusIndex);
-      }
+    if (routeInitialStatus != null) {
+      _setInitialStatus(routeInitialStatus);
     }
     
     // Only load data if this is the first time
     if (!_dataLoaded) {
       _loadOrders();
       _dataLoaded = true;
+    }
+  }
+  
+  // Helper method to set initial status and update tab controller
+  void _setInitialStatus(String status) {
+    // Map the incoming status to our tab status
+    String mappedStatus;
+    switch (status) {
+      case 'Pending Approval':
+        mappedStatus = 'Pending Approval';
+        break;
+      case 'Released':
+      case 'Approved':
+        mappedStatus = 'Approved';
+        break;
+      case 'Open':
+        mappedStatus = 'Open';
+        break;
+      default:
+        mappedStatus = 'All';
+    }
+    
+    final statusIndex = _statusTabs.indexOf(mappedStatus);
+    if (statusIndex != -1) {
+      setState(() {
+        _selectedStatus = mappedStatus;
+      });
+      
+      // Animate to the correct tab
+      if (_tabController.index != statusIndex) {
+        _tabController.animateTo(statusIndex);
+      }
     }
   }
 
@@ -261,7 +292,6 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
       };
     }).toList();
   }
-
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -279,6 +309,7 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _refreshOrders,
+            tooltip: 'Refresh Orders',
           ),
           const SizedBox(width: 16),
         ],
@@ -294,6 +325,7 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
           });
         },
         backgroundColor: const Color(0xFF008000),
+        tooltip: 'Create New Order',
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: Column(
@@ -315,6 +347,8 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
               indicatorColor: const Color(0xFF008000),
               labelColor: const Color(0xFF008000),
               unselectedLabelColor: Colors.grey.shade700,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
               tabs: _statusTabs.map((status) => Tab(text: status)).toList(),
             ),
           ),
@@ -325,7 +359,24 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
           // Orders list or empty state
           _isInitialLoading
               ? const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Color(0xFF008000),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading orders...',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 )
               : Expanded(
                   child: TabBarView(
@@ -333,12 +384,17 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
                     children: _statusTabs.map((tabStatus) {
                       // The content will be the same for each tab
                       // TabController handles the switching and state management
-                      return RefreshIndicator(
-                        onRefresh: _refreshOrders,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _allOrders.isEmpty
+                      return Column(
+                        children: [
+                          // Loading indicator for subsequent loads
+                          if (_isLoading && !_isInitialLoading)
+                            const LinearProgressIndicator(
+                              color: Color(0xFF008000),
+                              backgroundColor: Colors.grey,
+                            ),
+                          
+                          Expanded(
+                            child: _allOrders.isEmpty
                                 ? _buildEmptyState()
                                 : Padding(
                                     padding: const EdgeInsets.all(16),
@@ -354,13 +410,12 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
                                           onRefresh: _refreshOrders,
                                         ),
                                   ),
-                            ),
-                            
-                            // Pagination controls
-                            if (_totalRecords > 0)
-                              _buildPaginationControls(),
-                          ],
-                        ),
+                          ),
+                          
+                          // Pagination controls
+                          if (_totalRecords > 0)
+                            _buildPaginationControls(),
+                        ],
                       );
                     }).toList(),
                   ),
@@ -483,164 +538,204 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
   
   // Show filter popup dialog
   void _showFilterPopup(BuildContext context) {
-    // Create temporary date holders for the popup
-    DateTime? tempFromDate = _fromDate;
-    DateTime? tempToDate = _toDate;
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Row(
+  // Create temporary date holders for the popup
+  DateTime? tempFromDate = _fromDate;
+  DateTime? tempToDate = _toDate;
+  
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          // Get screen width for responsive design
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isLargeScreen = screenWidth > 400;
+          
+          // Responsive button dimensions
+          final buttonWidth = isLargeScreen ? 80.0 : 60.0;
+          final buttonHeight = isLargeScreen ? 40.0 : 32.0;
+          final fontSize = isLargeScreen ? 13.0 : 11.0;
+          final spacing = isLargeScreen ? 8.0 : 4.0;
+          
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.filter_list, color: Color(0xFF008000)),
+                const SizedBox(width: 8),
+                const Text('Order Filters'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.filter_list, color: Color(0xFF008000)),
-                  const SizedBox(width: 8),
-                  const Text('Order Filters'),
+                  // From Date
+                  const Text(
+                    'From Date',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final DateTime? pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: tempFromDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+
+                      if (pickedDate != null) {
+                        setState(() {
+                          tempFromDate = pickedDate;
+                        });
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            tempFromDate != null
+                                ? DateFormat('dd/MM/yyyy').format(tempFromDate!)
+                                : 'Select From Date',
+                            style: TextStyle(
+                              color: tempFromDate != null ? Colors.black : Colors.grey.shade600,
+                            ),
+                          ),
+                          const Icon(Icons.calendar_today, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // To Date
+                  const Text(
+                    'To Date',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final DateTime? pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: tempToDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+
+                      if (pickedDate != null) {
+                        setState(() {
+                          tempToDate = pickedDate;
+                        });
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            tempToDate != null
+                                ? DateFormat('dd/MM/yyyy').format(tempToDate!)
+                                : 'Select To Date',
+                            style: TextStyle(
+                              color: tempToDate != null ? Colors.black : Colors.grey.shade600,
+                            ),
+                          ),
+                          const Icon(Icons.calendar_today, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Action Buttons in a Row with responsive sizing
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: buttonWidth,
+                        height: buttonHeight,
+                        child: TextButton(
+                          onPressed: () {
+                            // Reset filters
+                            Navigator.pop(context);
+                            this.setState(() {
+                              _fromDate = null;
+                              _toDate = null;
+                            });
+                            _resetFilters();
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Text('Reset', style: TextStyle(fontSize: fontSize)),
+                        ),
+                      ),
+                      SizedBox(width: spacing),
+                      SizedBox(
+                        width: buttonWidth,
+                        height: buttonHeight,
+                        child: TextButton(
+                          onPressed: () {
+                            // Cancel without applying
+                            Navigator.pop(context);
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Text('Cancel', style: TextStyle(fontSize: fontSize)),
+                        ),
+                      ),
+                      SizedBox(width: spacing),
+                      SizedBox(
+                        width: buttonWidth,
+                        height: buttonHeight,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Apply filters and close popup
+                            Navigator.pop(context);
+                            this.setState(() {
+                              _fromDate = tempFromDate;
+                              _toDate = tempToDate;
+                            });
+                            _applyFilters();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF008000),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Text('Apply', style: TextStyle(fontSize: fontSize)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // From Date
-                    const Text(
-                      'From Date',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () async {
-                        final DateTime? pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: tempFromDate ?? DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-
-                        if (pickedDate != null) {
-                          setState(() {
-                            tempFromDate = pickedDate;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade400),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              tempFromDate != null
-                                  ? DateFormat('dd/MM/yyyy').format(tempFromDate!)
-                                  : 'Select From Date',
-                              style: TextStyle(
-                                color: tempFromDate != null ? Colors.black : Colors.grey.shade600,
-                              ),
-                            ),
-                            const Icon(Icons.calendar_today, size: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // To Date
-                    const Text(
-                      'To Date',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () async {
-                        final DateTime? pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: tempToDate ?? DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-
-                        if (pickedDate != null) {
-                          setState(() {
-                            tempToDate = pickedDate;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade400),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              tempToDate != null
-                                  ? DateFormat('dd/MM/yyyy').format(tempToDate!)
-                                  : 'Select To Date',
-                              style: TextStyle(
-                                color: tempToDate != null ? Colors.black : Colors.grey.shade600,
-                              ),
-                            ),
-                            const Icon(Icons.calendar_today, size: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    // Reset filters
-                    Navigator.pop(context);
-                    this.setState(() {
-                      _fromDate = null;
-                      _toDate = null;
-                    });
-                    _resetFilters();
-                  },
-                  child: const Text('Reset'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Cancel without applying
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    // Apply filters and close popup
-                    Navigator.pop(context);
-                    this.setState(() {
-                      _fromDate = tempFromDate;
-                      _toDate = tempToDate;
-                    });
-                    _applyFilters();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF008000),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Apply'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+  
   // Build the advanced filters section
   Widget _buildAdvancedFilters(bool isSmallScreen) {
     return AnimatedContainer(

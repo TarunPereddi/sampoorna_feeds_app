@@ -23,7 +23,7 @@ class AuthService extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
   
-  Future<bool> login(String username, String password) async {
+  Future<dynamic> login(String username, String password) async {
     try {
       _isLoading = true;
       _error = null;
@@ -40,8 +40,13 @@ class AuthService extends ChangeNotifier {
             'password': password,
           },
         );
-        
-        if (loginResponse['value'] == 'OK') {
+          // Check if it's a first-time login
+        if (loginResponse['value'] == 'First Login') {
+          _isLoading = false;
+          notifyListeners();
+          // Return a special result for first-time login
+          return 'first_login';
+        } else if (loginResponse['value'] == 'OK') {
           // If login successful, get the sales person details
           final response = await apiService.get('SalesPerson', 
             queryParams: {'\$filter': "Code eq '$username'"});
@@ -221,10 +226,88 @@ class AuthService extends ChangeNotifier {
       return ForgotPasswordResult(
         success: false,
         message: e.toString().replaceAll("Exception: ", ""),
-      );
-    }
+      );    }
   }
   
+  Future<bool> completeFirstTimeLogin(String username, String password) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+      
+      final ApiService apiService = ApiService();
+      
+      // Try the login again after password change
+      final loginResponse = await apiService.post(
+        'API_LoginApp',
+        body: {
+          'userID': username,
+          'password': password,
+        },
+      );
+      
+      if (loginResponse['value'] == 'OK') {
+        // Get the sales person details
+        final response = await apiService.get('SalesPerson', 
+          queryParams: {'\$filter': "Code eq '$username'"});
+        
+        final salesPersons = response['value'] as List;
+        
+        if (salesPersons.isEmpty) {
+          _error = 'User not found';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+        
+        if (salesPersons[0]['Block'] == true) {
+          _error = 'User is blocked';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+        
+        _currentUser = SalesPerson.fromJson(salesPersons[0]);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _error = 'Login failed after password change';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      // Extract error message without CorrelationId
+      String errorMessage = 'Login failed';
+      
+      // Try to parse the error message from the API response
+      final errorString = e.toString();
+      if (errorString.contains('"message"')) {
+        try {
+          // Extract message content between quotes
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorString);
+          if (match != null && match.groupCount >= 1) {
+            String message = match.group(1)!;
+            // Remove CorrelationId and everything after it
+            if (message.contains('CorrelationId')) {
+              message = message.split('CorrelationId')[0].trim();
+            }
+            errorMessage = message;
+          }
+        } catch (_) {
+          // If parsing fails, use default message
+        }
+      }
+      
+      _error = errorMessage;
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   void logout() {
     _currentUser = null;
     notifyListeners();

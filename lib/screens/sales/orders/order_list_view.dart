@@ -7,18 +7,32 @@ class OrderListView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
   final ScrollController scrollController;
   final VoidCallback? onRefresh;
+  final bool isNestedInScrollView; // New parameter
 
   const OrderListView({
     super.key,
     required this.orders,
     required this.scrollController,
     this.onRefresh,
+    this.isNestedInScrollView = false, // Default to false
   });
 
   @override
   Widget build(BuildContext context) {
+    if (orders.isEmpty && isNestedInScrollView) {
+        // Avoid rendering an empty ListView with shrinkWrap that might take up some default space or cause issues.
+        // Render nothing or a placeholder if it's nested and empty.
+        return const SizedBox.shrink(); 
+    }
+    if (orders.isEmpty) {
+        // If not nested and empty, it might be the primary view, show a message.
+        return const Center(child: Text("No orders to display."));
+    }
+    
     return ListView.builder(
-      controller: scrollController,
+      controller: isNestedInScrollView ? null : scrollController,
+      physics: isNestedInScrollView ? const ClampingScrollPhysics() : null, // Use ClampingScrollPhysics when nested
+      shrinkWrap: isNestedInScrollView,
       itemCount: orders.length,
       itemBuilder: (context, index) {
         final order = orders[index];
@@ -33,11 +47,15 @@ class OrderListView extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      order['id'] as String,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Expanded(
+                      child: Text(
+                        order['id'] as String,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                     _buildStatusChip(order['status'] as String),
@@ -106,70 +124,181 @@ class OrderListView extends StatelessWidget {
                   ],
                 ),
                 const Divider(height: 24),
-                Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    // Add Send for Approval button only for Open orders
-    if (order['status'] == 'Open')
-      TextButton.icon(
-        onPressed: () {
-          // Show send for approval confirmation
-          _showSendForApprovalDialog(context, order['id']);
-        },
-        icon: const Icon(Icons.check_circle, size: 18),
-        label: const Text('Send for Approval'),
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.green,
-        ),
-      ),
-    if (order['status'] == 'Open')
-      const SizedBox(width: 8),
-    TextButton.icon(
-      onPressed: () {
-        // View order details
-        _showViewOrderDetails(context, order);
-      },
-      icon: const Icon(Icons.visibility, size: 18),
-      label: const Text('View'),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.blue,
-      ),
-    ),
-    const SizedBox(width: 8),
-    TextButton.icon(
-      onPressed: () {
-        // Edit order
-        _showEditOrderDialog(context, order);
-      },
-      icon: const Icon(Icons.edit, size: 18),
-      label: const Text('Edit'),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.orange,
-      ),
-    ),
-    // Add Reopen button for Pending Approval or Released (Approved) orders
-    if (order['status'] == 'Pending Approval' || order['status'] == 'Released') ...[
-      const SizedBox(width: 8),
-      TextButton.icon(
-        onPressed: () {
-          // Show reopen confirmation
-          _showReopenOrderDialog(context, order['id']);
-        },
-        icon: const Icon(Icons.refresh, size: 18),
-        label: const Text('Reopen'),
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.purple,
-        ),
-      ),
-    ],
-  ],
-),
+                _buildActionButtons(context, order),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  // Build responsive action buttons
+  Widget _buildActionButtons(BuildContext context, Map<String, dynamic> order) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 400;
+    
+    // Get buttons based on order status
+    List<Widget> buttons = _getActionButtons(context, order, isSmallScreen);
+      if (isSmallScreen) {
+      // For very small screens, use a more compact layout with better spacing and alignment
+      return Wrap(
+        alignment: WrapAlignment.center, // Changed from .end to .center
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 6,
+        children: buttons,
+      );
+    } else {
+      // For larger screens, use a single row
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center, // Changed from .end to .center
+          children: buttons,
+        ),
+      );
+    }
+  }
+
+  // Get action buttons based on order status and screen size
+  List<Widget> _getActionButtons(BuildContext context, Map<String, dynamic> order, bool isSmallScreen) {
+    List<Widget> buttons = [];
+    const smallScreenIconSize = 18.0;
+    const smallScreenFontSize = 12.0;
+    const smallScreenPadding = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+    final smallScreenTapTargetSize = MaterialTapTargetSize.shrinkWrap;
+
+      // Send for Approval button (only for Open orders)
+    if (order['status'] == 'Open') {
+      buttons.add(
+        isSmallScreen
+          ? TextButton.icon(
+              onPressed: () => _showSendForApprovalDialog(context, order['id']),
+              icon: const Icon(Icons.check_circle, size: smallScreenIconSize),
+              label: const Text('Approve', style: TextStyle(fontSize: smallScreenFontSize), textAlign: TextAlign.center),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.green,
+                padding: smallScreenPadding,
+                tapTargetSize: smallScreenTapTargetSize,
+              ),
+            )
+          : TextButton.icon(
+              onPressed: () => _showSendForApprovalDialog(context, order['id']),
+              icon: const Icon(Icons.check_circle, size: 16),
+              label: const Text('Approve', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+            ),
+      );
+      if (!isSmallScreen && buttons.isNotEmpty) buttons.add(const SizedBox(width: 4));
+    }
+
+    // Reopen button (for Pending Approval or Released orders) - positioned near approval
+    if (order['status'] == 'Pending Approval' || order['status'] == 'Released') {
+      buttons.add(
+        isSmallScreen
+          ? TextButton.icon(
+              onPressed: () => _showReopenOrderDialog(context, order['id']),
+              icon: const Icon(Icons.refresh, size: smallScreenIconSize),
+              label: const Text('Reopen', style: TextStyle(fontSize: smallScreenFontSize), textAlign: TextAlign.center),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.purple,
+                padding: smallScreenPadding,
+                tapTargetSize: smallScreenTapTargetSize,
+              ),
+            )
+          : TextButton.icon(
+              onPressed: () => _showReopenOrderDialog(context, order['id']),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reopen', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.purple,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+            ),
+      );
+      if (!isSmallScreen && buttons.isNotEmpty) buttons.add(const SizedBox(width: 8)); 
+    }
+    
+    // View button
+    buttons.add(
+      isSmallScreen
+        ? TextButton.icon(
+            onPressed: () => _showViewOrderDetails(context, order),
+            icon: const Icon(Icons.visibility, size: smallScreenIconSize),
+            label: const Text('View', style: TextStyle(fontSize: smallScreenFontSize), textAlign: TextAlign.center),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.blue,
+              padding: smallScreenPadding,
+              tapTargetSize: smallScreenTapTargetSize,
+            ),
+          )
+        : TextButton.icon(
+            onPressed: () => _showViewOrderDetails(context, order),
+            icon: const Icon(Icons.visibility, size: 16),
+            label: const Text('View', style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.blue,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          ),
+    );
+    
+    if (!isSmallScreen && buttons.isNotEmpty) buttons.add(const SizedBox(width: 4));
+    
+    // Edit button
+    buttons.add(
+      isSmallScreen
+        ? TextButton.icon(
+            onPressed: () => _showEditOrderDialog(context, order),
+            icon: const Icon(Icons.edit, size: smallScreenIconSize),
+            label: const Text('Edit', style: TextStyle(fontSize: smallScreenFontSize), textAlign: TextAlign.center),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange,
+              padding: smallScreenPadding,
+              tapTargetSize: smallScreenTapTargetSize,
+            ),
+          )
+        : TextButton.icon(
+            onPressed: () => _showEditOrderDialog(context, order),
+            icon: const Icon(Icons.edit, size: 16),
+            label: const Text('Edit', style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          ),
+    );
+    
+    // Add spacing between buttons for larger screens if using Row
+    if (!isSmallScreen && buttons.length > 1) {
+      List<Widget> spacedButtons = [];
+      for (int i = 0; i < buttons.length; i++) {
+        spacedButtons.add(buttons[i]);
+        if (i < buttons.length - 1) {
+          // Use the specific spacing logic that was present before, or a default
+          // The original code added SizedBox(width: 4) or SizedBox(width: 8) conditionally
+          // For simplicity here, I'll add a consistent small spacing, 
+          // but this might need to revert to the more complex conditional spacing if that was important.
+          // Re-evaluating the original spacing logic:
+          // - After Approve: width: 4
+          // - After Reopen: width: 8
+          // - After View: width: 4
+          // This logic was already present and handled by the `if (!isSmallScreen) buttons.add(const SizedBox(width: X));` lines
+          // The current refactoring for `_getActionButtons` has moved the SizedBox additions.
+          // Let's ensure the SizedBox logic is correctly maintained or simplified.
+        }
+      }
+      // The existing SizedBox additions within the if blocks for each button type on large screens
+      // already handle the spacing. The loop above is not needed and might misinterpret the spacing.
+      // The current structure of adding SizedBox after each button (for non-small screens) is fine,
+      // as Row will just place them.
+    }
+
+    return buttons;
   }
 
   // Status indicator chip with color coding
@@ -207,90 +336,8 @@ class OrderListView extends StatelessWidget {
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
-      ),
-    );
+      ),    );
   }
-
-  Future<void> _reopenOrderAndNavigateToEdit(BuildContext context, Map<String, dynamic> order) async {
-  // Store dialog context to ensure it can be closed even if parent context is disposed
-  BuildContext? dialogContext;
-  
-  // Show loading dialog
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      dialogContext = context;
-      return AlertDialog(
-        content: Row(
-          children: [
-            const CircularProgressIndicator(color: Colors.orange),
-            const SizedBox(width: 16),
-            Text('Reopening order ${order['id']}...'),
-          ],
-        ),
-      );
-    },
-  );
-  
-  final apiService = ApiService();
-  
-  try {
-    // Call the API to reopen the order
-    final result = await apiService.reopenSalesOrder(order['id']);
-    
-    // Make sure to close the dialog
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    }
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Order reopened successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    
-    // Navigate to edit screen
-    _navigateToEditScreen(context, order);
-    
-    // Refresh the orders list if callback is provided
-    if (onRefresh != null) {
-      onRefresh!();
-    }
-  } catch (e) {
-    // Make sure to close the dialog
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    // Show error message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Failed to reopen order: $e'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
-
-// Navigate to edit screen
-void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
-  // Use direct navigation since named routes are causing issues
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => EditOrderScreen(orderNo: order['id']),
-    ),
-  ).then((_) {
-    // Refresh the orders list when returning from edit screen
-    if (onRefresh != null) {
-      onRefresh!();
-    }
-  });
-}
-
 
   // Show order details dialog
   void _showViewOrderDetails(BuildContext context, Map<String, dynamic> order) {
@@ -325,6 +372,116 @@ void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
     );
   }
 
+  // Show send for approval confirmation dialog
+  void _showSendForApprovalDialog(BuildContext context, String orderNo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            const Text('Send for Approval'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            'Are you sure you want to send order $orderNo for approval? This action cannot be undone.',
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.end, 
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              Navigator.pop(context); 
+              _sendOrderForApproval(context, orderNo); 
+            },
+            child: const Text('Send for Approval'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Process the API call to send order for approval
+  Future<void> _sendOrderForApproval(BuildContext context, String orderNo) async {
+    BuildContext? dialogContext; // For managing the loading dialog
+    // CORRECTED: Capture ScaffoldMessengerState before await
+    final scaffoldMessenger = ScaffoldMessenger.of(context); 
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        dialogContext = context;
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(color: Colors.green),
+              const SizedBox(width: 16),
+              Expanded(child: Text('Sending order $orderNo for approval...')),
+            ],
+          ),
+        );
+      },
+    );
+
+    final apiService = ApiService();
+    try {
+      final result = await apiService.sendOrderForApproval(orderNo);
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog
+      }
+
+      
+
+      if (result['success'] == true) {
+        // CORRECTED: Use captured scaffoldMessenger
+        scaffoldMessenger.showSnackBar( 
+          SnackBar(
+            content: Text(result['message'] ?? 'Order sent for approval successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        if (onRefresh != null) {
+          onRefresh!(); // Trigger refresh
+        }
+      } else {
+        // CORRECTED: Use captured scaffoldMessenger
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to send order for approval: ${result['message'] ?? "Unknown error"}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog on error
+      }
+      // CORRECTED: Use captured scaffoldMessenger
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('An error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
 // Show reopen order confirmation dialog
 void _showReopenOrderDialog(BuildContext context, String orderNo) {
@@ -338,23 +495,32 @@ void _showReopenOrderDialog(BuildContext context, String orderNo) {
           const Text('Reopen Order'),
         ],
       ),
-      content: Text(
-        'Are you sure you want to reopen order $orderNo? This will change the status back to Open.',
+      content: SingleChildScrollView(
+        child: Text(
+          'Are you sure you want to reopen order $orderNo? This will set its status back to Open.',
+        ),
       ),
+      actionsAlignment: MainAxisAlignment.end, 
       actions: [
         TextButton(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            _reopenOrder(context, orderNo);
-          },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.purple,
             foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
+          onPressed: () {
+            Navigator.pop(context); 
+            _reopenOrder(context, orderNo); 
+          },
           child: const Text('Reopen'),
         ),
       ],
@@ -364,10 +530,10 @@ void _showReopenOrderDialog(BuildContext context, String orderNo) {
 
 // Process the API call to reopen order
 Future<void> _reopenOrder(BuildContext context, String orderNo) async {
-  // Store dialog context to ensure it can be closed even if parent context is disposed
-  BuildContext? dialogContext;
-  
-  // Show loading dialog
+  BuildContext? dialogContext; // For managing the loading dialog
+  // CORRECTED: Capture ScaffoldMessengerState before await
+  final scaffoldMessenger = ScaffoldMessenger.of(context);
+
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -378,44 +544,36 @@ Future<void> _reopenOrder(BuildContext context, String orderNo) async {
           children: [
             const CircularProgressIndicator(color: Colors.purple),
             const SizedBox(width: 16),
-            Text('Reopening order $orderNo...'),
+            Expanded(child: Text('Reopening order $orderNo...')),
           ],
         ),
       );
     },
   );
-  
+
   final apiService = ApiService();
-  
   try {
-    // Call the API
-    final result = await apiService.reopenSalesOrder(orderNo);
-    
-    // Make sure to close the dialog
+    await apiService.reopenSalesOrder(orderNo);
     if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
+      Navigator.of(dialogContext!).pop(); // Close loading dialog
     }
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
+    // CORRECTED: Use captured scaffoldMessenger
+    scaffoldMessenger.showSnackBar(
       const SnackBar(
         content: Text('Order reopened successfully!'),
         backgroundColor: Colors.green,
       ),
     );
-    
-    // Refresh the orders list if callback is provided
     if (onRefresh != null) {
-      onRefresh!();
+      onRefresh!(); // Trigger refresh
     }
   } catch (e) {
-    // Make sure to close the dialog
     if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
+      Navigator.of(dialogContext!).pop(); // Close loading dialog on error
     }
-    
-    // Show error message
-    ScaffoldMessenger.of(context).showSnackBar(
+    // CORRECTED: Use captured scaffoldMessenger
+    scaffoldMessenger.showSnackBar(
       SnackBar(
         content: Text('Failed to reopen order: $e'),
         backgroundColor: Colors.red,
@@ -423,102 +581,6 @@ Future<void> _reopenOrder(BuildContext context, String orderNo) async {
     );
   }
 }
-
-  // Show send for approval confirmation dialog
-  void _showSendForApprovalDialog(BuildContext context, String orderNo) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green),
-            const SizedBox(width: 8),
-            const Text('Send for Approval'),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to send order $orderNo for approval? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _sendOrderForApproval(context, orderNo);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Send for Approval'),
-          ),
-        ],
-      ),
-    );
-  }  // Process the API call to send order for approval
-  Future<void> _sendOrderForApproval(BuildContext context, String orderNo) async {
-    // Store dialog context to ensure it can be closed even if parent context is disposed
-    BuildContext? dialogContext;
-    
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        dialogContext = context;
-        return AlertDialog(
-          content: Row(
-            children: [
-              const CircularProgressIndicator(color: Colors.green),
-              const SizedBox(width: 16),
-              Text('Sending order $orderNo for approval...'),
-            ],
-          ),
-        );
-      },
-    );
-
-    final apiService = ApiService();
-
-    // Call the API - the sendOrderForApproval method now returns a structured response
-    final result = await apiService.sendOrderForApproval(orderNo);
-    
-    // Make sure to close the dialog - if dialogContext is null use normal context
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    } else if (Navigator.canPop(context)) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    // Handle the result
-    if (result['success'] == true) {
-      // Show success message with API response message if available
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'Order sent for approval successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Refresh the orders list if callback is provided
-      if (onRefresh != null) {
-        onRefresh!();
-      }
-    } else {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to send order for approval: ${result['message'] ?? "Unknown error"}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  // In OrderListView and OrderTableView
 
 // Show edit order dialog
 

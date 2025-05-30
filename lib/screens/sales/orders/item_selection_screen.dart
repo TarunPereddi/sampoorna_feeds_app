@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../../models/item.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/app_colors.dart';
 
 class ItemSelectionScreen extends StatefulWidget {
   final String locationCode;
@@ -27,6 +28,13 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
   List<Item> _items = [];
   bool _isLoading = false;
   bool _isSearching = false;
+  
+  // Pagination 
+  int _currentPage = 1;
+  int _totalItems = 0;
+  int _itemsPerPage = 10;
+  bool _hasMoreItems = true;
+  bool _isLoadingMore = false;
   
   // For API call debouncing
   Timer? _searchDebounce;
@@ -54,30 +62,35 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
     _searchDebounce?.cancel();
     super.dispose();
   }
-  
-  void _scrollListener() {
-    // Implement pagination if needed
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-      // Could load more items here if pagination is implemented
+    void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8) {
+      if (!_isLoading && !_isLoadingMore && _hasMoreItems) {
+        _loadMoreItems();
+      }
     }
   }
-  
-  Future<void> _loadItems({String? searchQuery}) async {
+    Future<void> _loadItems({String? searchQuery}) async {
     if (_isLoading) return;
     
     setState(() {
       _isLoading = true;
+      _currentPage = 1; // Reset to first page for new searches
+      _items = []; // Clear current list for new searches
       if (searchQuery != null) _isSearching = true;
     });
     
     try {
-      final itemsData = await _apiService.getItems(
+      final result = await _apiService.getItemsWithPagination(
         locationCode: widget.locationCode,
         searchQuery: searchQuery,
+        page: _currentPage,
+        pageSize: _itemsPerPage,
       );
       
       setState(() {
-        _items = itemsData.map((json) => Item.fromJson(json)).toList();
+        _items = result.items.map((json) => Item.fromJson(json)).toList();
+        _totalItems = result.totalCount;
+        _hasMoreItems = _items.length < _totalItems;
         _isLoading = false;
         _isSearching = false;
       });
@@ -92,22 +105,51 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
     }
   }
   
-  void _performSearch() {
+  Future<void> _loadMoreItems() async {
+    if (_isLoading || _isLoadingMore || !_hasMoreItems) return;
+    
+    setState(() {
+      _isLoadingMore = true;
+      _currentPage++;
+    });
+    
+    try {
+      final result = await _apiService.getItemsWithPagination(
+        locationCode: widget.locationCode,
+        searchQuery: _searchController.text.isEmpty ? null : _searchController.text,
+        page: _currentPage,
+        pageSize: _itemsPerPage,
+      );
+      
+      setState(() {
+        _items.addAll(result.items.map((json) => Item.fromJson(json)).toList());
+        _hasMoreItems = _items.length < _totalItems;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingMore = false;
+        _currentPage--; // Revert page increment on error
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading more items: $e')),
+      );
+    }
+  }
+    void _performSearch() {
     if (_isSearching) return;
     
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
     
-    _searchDebounce = Timer(const Duration(milliseconds: 100), () {
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       _loadItems(searchQuery: _searchController.text.isEmpty ? null : _searchController.text);
     });
   }
   
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Item'),
-        backgroundColor: const Color(0xFF008000),
+  Widget build(BuildContext context) {    return Scaffold(      appBar: AppBar(
+        title: const Text('Select Product', style: TextStyle(color: AppColors.white)),
+        backgroundColor: AppColors.primaryDark,
       ),
       body: Column(
         children: [
@@ -130,11 +172,10 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
                     onSubmitted: (_) => _performSearch(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
+                const SizedBox(width: 8),                ElevatedButton(
                   onPressed: _isSearching ? null : _performSearch,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF008000),
+                    backgroundColor: AppColors.primaryDark,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: _isSearching
@@ -148,10 +189,38 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
               ],
             ),
           ),
-          
-          // Loading indicator for search
+            // Loading indicator for search
           if (_isSearching)
             const LinearProgressIndicator(),
+            
+          // Results Count
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              border: Border(
+                bottom: BorderSide(color: AppColors.grey300, width: 1),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.primaryDark),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Results: $_totalItems',
+                      style: TextStyle(
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           
           // Items List
           Expanded(
@@ -164,28 +233,43 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
                           style: TextStyle(color: Colors.grey.shade700),
                         ),
                       )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        itemCount: _items.length,
-                        itemBuilder: (context, index) {
-                          final item = _items[index];
-                          final isSelected = widget.initialSelection != null && 
-                                          widget.initialSelection!.no == item.no;
-                          
-                          return ListTile(
-                            title: Text(
-                              '${item.no} - ${item.description}',
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    : Stack(
+                        children: [
+                          ListView.builder(
+                            controller: _scrollController,
+                            itemCount: _items.length,
+                            itemBuilder: (context, index) {
+                              final item = _items[index];
+                              final isSelected = widget.initialSelection != null && 
+                                              widget.initialSelection!.no == item.no;
+                              
+                              return ListTile(
+                                title: Text(
+                                  '${item.no} - ${item.description}',
+                                  style: TextStyle(
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
+                                onTap: () {
+                                  Navigator.pop(context, item);
+                                },
+                              );
+                            },
+                          ),
+                          if (_isLoadingMore)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                height: 50,
+                                alignment: Alignment.center,
+                                color: Colors.black.withOpacity(0.1),
+                                child: const CircularProgressIndicator(),
                               ),
                             ),
-                            subtitle: Text('Unit Price: ₹${item.unitPrice.toStringAsFixed(2)}'),
-                            tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
-                            onTap: () {
-                              Navigator.pop(context, item);
-                            },
-                          );
-                        },
+                        ],
                       ),
           ),
         ],

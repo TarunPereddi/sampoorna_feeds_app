@@ -31,6 +31,7 @@ class SalesShell extends StatefulWidget {
 
 class _SalesShellState extends State<SalesShell> {
   late int _selectedIndex;
+  
   // Maintain separate navigation keys for each tab to enable
   // independent navigation stacks
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
@@ -47,11 +48,14 @@ class _SalesShellState extends State<SalesShell> {
       _selectedIndex = index;
     });
     
-    // If arguments are provided, pass them to the appropriate tab
+    // If arguments are provided, handle them appropriately
     if (arguments != null && _navigatorKeys[index].currentState != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Reset to first route and then push the arguments to the tab
-        _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
+        // Reset to first route with arguments
+        _navigatorKeys[index].currentState!.pushReplacementNamed(
+          '/',
+          arguments: arguments,
+        );
       });
     }
   }
@@ -115,9 +119,7 @@ class _SalesShellState extends State<SalesShell> {
                             (context) => const HomeScreen(),
                           ),
                   ),
-                ),
-
-                // Orders Tab
+                ),                // Orders Tab
                 Offstage(
                   offstage: _selectedIndex != 1,
                   child: RepaintBoundary(
@@ -125,7 +127,12 @@ class _SalesShellState extends State<SalesShell> {
                         ? Container() // Don't build if not visible and not initialized
                         : _buildTabNavigator(
                             1,
-                            (context) => const OrdersScreenFixed(),
+                            (context) {
+                              // Check if there are pending arguments for the orders screen
+                              final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+                              final initialStatus = args?['initialStatus'] as String?;
+                              return OrdersScreenFixed(initialStatus: initialStatus);
+                            },
                           ),
                   ),
                 ),

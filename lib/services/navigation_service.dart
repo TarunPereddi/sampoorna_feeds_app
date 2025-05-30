@@ -9,13 +9,11 @@ class NavigationService {
   static void navigateToTab(BuildContext context, int tabIndex, {Map<String, dynamic>? arguments}) {
     // Check if we're already in a SalesShell
     bool inSalesShell = false;
-    SalesShell? currentShell;
     
     // Walk up the widget tree to find any SalesShell ancestor
     context.visitAncestorElements((element) {
       if (element.widget is SalesShell) {
         inSalesShell = true;
-        currentShell = element.widget as SalesShell;
         return false; // Stop traversing
       }
       return true; // Continue traversing

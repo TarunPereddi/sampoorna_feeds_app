@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_colors.dart';
 import 'forgot_password_screen.dart';
+import 'first_time_password_change_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -472,24 +473,36 @@ Align(
       _isLoading = true;
     });
 
-    try {
-      if (_selectedPersona == 'sales') {
- // Use AuthService for sales persona
- final authService = Provider.of<AuthService>(context, listen: false);
- final success = await authService.login(username, password);
- 
- if (success) {
-   // Navigate to sales shell
-   if (mounted) {
-     Navigator.pushReplacementNamed(context, '/sales');
-   }
- }
-} else {
- // For customer and vendor personas, use the original navigation
- if (mounted) {
-   Navigator.pushReplacementNamed(context, '/$_selectedPersona');
- }
-}
+    try {      if (_selectedPersona == 'sales') {
+        // Use AuthService for sales persona
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final result = await authService.login(username, password);
+        
+        if (result == 'first_login') {
+          // Navigate to first-time password change screen
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => FirstTimePasswordChangeScreen(
+                  username: username,
+                  currentPassword: password,
+                ),
+              ),
+            );
+          }
+        } else if (result == true) {
+          // Navigate to sales shell
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/sales');
+          }
+        }
+      } else {
+        // For customer and vendor personas, use the original navigation
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/$_selectedPersona');
+        }
+      }
     } catch (e) {
       // Error handling is done by AuthService
       debugPrint('Login error: $e');

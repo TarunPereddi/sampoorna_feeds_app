@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
@@ -18,10 +19,8 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAliveClientMixin {
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
-  Timer? _searchDebouncer;
-  
+  Timer? _searchDebouncer;  
   List<Customer> _customers = [];
-  List<Customer> _allCustomers = [];
   String _salesPersonCode = '';
   bool _isLoading = false;
   bool _isSearching = false;
@@ -64,13 +63,18 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
       _dataLoaded = true;
     }
   }
-  
-  @override
+    @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _searchDebouncer?.cancel();
     super.dispose();
+  }
+
+  // Helper method to format currency values
+  String _formatCurrency(double value) {
+    final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
+    return '₹${currencyFormat.format(value)}';
   }
 
   // Handle search input changes with debouncing
@@ -81,22 +85,15 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         _performSearch();
       }
     });
-  }
-
-  // Apply filters to customer list
-  List<Customer> _applyFilters(List<Customer> customers) {
-    List<Customer> filtered = List.from(customers);
-    
-    // Apply blocked filter
+  }  // Get filter parameter for API call based on selected filter
+  String? _getFilterParameter() {
     if (_showBlockedOnly) {
-      filtered = filtered.where((customer) => 
-        customer.blocked != null && customer.blocked!.trim().isNotEmpty).toList();
+      return "Blocked ne ''"; // Find customers where blocked field is not empty
     } else if (_hideBlocked) {
-      filtered = filtered.where((customer) => 
-        customer.blocked == null || customer.blocked!.trim().isEmpty).toList();
+      return "Blocked eq ''"; // Find customers where blocked field is empty
     }
     
-    return filtered;
+    return null; // No filter for "All" option
   }
 
   // Navigate to previous page
@@ -130,16 +127,17 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
     
     try {
       final searchQuery = _searchController.text.trim();
+      final blockFilter = _getFilterParameter();
+      
       final result = await _apiService.getCustomersWithPagination(
         salesPersonCode: _salesPersonCode,
         searchQuery: searchQuery.isEmpty ? null : searchQuery,
         page: _currentPage,
         pageSize: _itemsPerPage,
-      );
-      
+        blockFilter: blockFilter,
+      );      
       setState(() {
-        _allCustomers = result.items;
-        _customers = _applyFilters(_allCustomers);
+        _customers = result.items; // API filters for us
         _totalItems = result.totalCount;
         _totalPages = (_totalItems / _itemsPerPage).ceil();
         _isLoading = false;
@@ -177,14 +175,20 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
   void _clearSearch() {
     _searchController.clear();
     _performSearch();
-  }
-  // Set filter state directly
+  }  // Set filter state and reload data from API
   void _setFilter({required bool showBlockedOnly, required bool hideBlocked}) {
     setState(() {
       _showBlockedOnly = showBlockedOnly;
       _hideBlocked = hideBlocked;
-      _customers = _applyFilters(_allCustomers);
     });
+    
+    // Reset to page 1 when changing filters
+    setState(() {
+      _currentPage = 1;
+    });
+    
+    // Load new data with filter applied
+    _loadCustomers();
   }
 
   // Refresh data
@@ -297,8 +301,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         );
       }
     }
-  }
-  // Build filter buttons
+  }  // Build filter buttons
   Widget _buildFilterButtons() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -312,6 +315,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
             backgroundColor: Colors.grey.shade100,
             selectedColor: const Color(0xFF2C5F2D).withOpacity(0.2),
             checkmarkColor: const Color(0xFF2C5F2D),
+            tooltip: 'Show all customers',
           ),
           const SizedBox(width: 8),
           
@@ -323,6 +327,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
             backgroundColor: Colors.grey.shade100,
             selectedColor: Colors.green.shade100,
             checkmarkColor: Colors.green.shade700,
+            tooltip: 'Show only active customers',
           ),
           const SizedBox(width: 8),
           
@@ -334,6 +339,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
             backgroundColor: Colors.grey.shade100,
             selectedColor: Colors.red.shade100,
             checkmarkColor: Colors.red.shade700,
+            tooltip: 'Show only blocked customers',
           ),
         ],
       ),
@@ -359,7 +365,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: isBlocked ? Colors.red.shade50 : Colors.white,
+            color: isBlocked ? Colors.red.shade50 : Color(0xFF2C5F2D).withOpacity(0.05),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,7 +415,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                         ),                        if (customer.balanceLcy != 0) ...[
                           const SizedBox(height: 2),
                           Text(
-                            'Balance: ₹${customer.balanceLcy.toStringAsFixed(2)}',
+                            'Balance: ${_formatCurrency(customer.balanceLcy)}',
                             style: TextStyle(
                               color: customer.balanceLcy > 0 
                                   ? Colors.red.shade700 
@@ -625,9 +631,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
           ),
 
           // Filter Buttons
-          _buildFilterButtons(),
-
-          // Results Summary
+          _buildFilterButtons(),          // Results Summary
           if (_totalItems > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

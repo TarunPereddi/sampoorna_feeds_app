@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../../models/item.dart';
-import '../../../models/item_unit_of_measure.dart'; // Import the new model
+import '../../../models/item_unit_of_measure.dart';
 import '../../../services/api_service.dart';
 import 'item_selection_screen.dart';
 
@@ -266,7 +267,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       _fetchSalesPrice();
     }
   }
-
   @override
   void dispose() {
     _quantityController.dispose();
@@ -275,6 +275,16 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     _totalAmountController.dispose();
     _itemSearchController.dispose();
     super.dispose();
+  }
+
+  // Helper method to format currency values
+  String _formatCurrency(double value) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return currencyFormat.format(value);
   }
 
   
@@ -327,8 +337,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       _totalAmount = 0;
       _itemSearchController.clear();
     });
-  }
-  // Add the current item to the order
+  }  // Add the current item to the order
   void _addItemToOrder() {
     if (!_itemFormKey.currentState!.validate()) {
       return;
@@ -337,6 +346,17 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     if (_selectedItem == null || _selectedUnitOfMeasure == null || _quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required item fields')),
+      );
+      return;
+    }
+
+    // Check if total amount is zero
+    if (_totalAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid item - total amount cannot be zero'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -622,8 +642,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     );
   }
   // Layout for small screens
-  Widget _buildSmallScreenLayout() {
-    return Column(
+  Widget _buildSmallScreenLayout() {    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [        // Item Selection
         _isLoadingItems
@@ -631,15 +650,24 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             : _buildItemSelection(),
         const SizedBox(height: 12),
 
-        // Unit of Measure
-        _buildUomSelection(),
-        const SizedBox(height: 12),
-
-        // Quantity
-        _buildNumberField(
-          label: 'Quantity',
-          controller: _quantityController,
-          required: true,
+        // Unit of Measure and Quantity in the same row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Unit of Measure
+            Expanded(
+              child: _buildUomSelection(),
+            ),
+            const SizedBox(width: 12),
+            // Quantity
+            Expanded(
+              child: _buildNumberField(
+                label: 'Quantity',
+                controller: _quantityController,
+                required: true,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -683,8 +711,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
   // Layout for larger screens
   Widget _buildLargeScreenLayout() {
     return Column(
-      children: [
-        // Row 1: Item and Unit of Measure
+      children: [        // Row 1: Item and Unit of Measure
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -694,16 +721,33 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               child: _isLoadingItems
                   ? const Center(child: CircularProgressIndicator())
                   : _buildItemSelection(),
-            ),            const SizedBox(width: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Row 2: UoM and Quantity in same line
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // Unit of Measure
             Expanded(
               flex: 1,
               child: _buildUomSelection(),
             ),
+            const SizedBox(width: 12),
+            // Quantity
+            Expanded(
+              flex: 1,
+              child: _buildNumberField(
+                label: 'Quantity',
+                controller: _quantityController,
+                required: true,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
-        // Row 2: Quantity, MRP, Price, Total
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -840,10 +884,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
                 color: Colors.grey.shade100,
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
+              ),              child: Text(
                 label.contains('Price') || label.contains('MRP') || label.contains('Amount') || label.contains('Total')
-                    ? '₹$value' 
+                    ? _formatCurrency(double.tryParse(value) ?? 0.0)
                     : value,
                 style: TextStyle(
                   fontSize: smallVersion ? 12 : 13,

@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
-import '../../../models/location.dart';
 import 'order_form_widget.dart';
 import 'order_item_form_widget.dart';
 import 'order_items_list_widget.dart';
@@ -20,11 +20,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _orderFormScrollController = ScrollController();
   final ApiService _apiService = ApiService();
-
   // Form Data Structure
   final Map<String, dynamic> _orderData = {
     'orderDate': DateTime.now(),
-    'deliveryDate': null,
     'customer': null,
     'customerNo': null,
     'customerPriceGroup': null,
@@ -35,20 +33,27 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     'locationCode': '',
     'items': <Map<String, dynamic>>[],
   };
-
   // Total order amount
   double _orderTotal = 0;
 
   // Loading state
-  bool _isLoading = false;
   bool _isSubmitting = false;
   String _submissionStatus = ''; // Track submission status for user feedback
-
   @override
   void initState() {
     super.initState();
     // Initialize order date
     _orderData['orderDate'] = DateTime.now();
+  }
+
+  // Helper method to format currency values
+  String _formatCurrency(double value) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return currencyFormat.format(value);
   }
 
   // Calculate total order amount
@@ -182,9 +187,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             Text(
               'Total Items: ${_orderData['items'].length}',
               style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Total Amount: ₹${_orderTotal.toStringAsFixed(2)}',
+            ),            Text(
+              'Total Amount: ${_formatCurrency(_orderTotal)}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
@@ -239,16 +243,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       String shipToCode = _orderData['shipToCode'] ?? '';
       
       // Extract location code
-      String locationCode = _orderData['locationCode'] ?? '';
-      if (locationCode.isEmpty) {
+      String locationCode = _orderData['locationCode'] ?? '';      if (locationCode.isEmpty) {
         throw Exception('Invalid location selection');
       }
-
-      // Get delivery date (mandatory)
-    DateTime? deliveryDate = _orderData['deliveryDate'];
-    if (deliveryDate == null) {
-      throw Exception('Delivery date is required');
-    }
 
       // 1. Create the Sales Order Header
       _updateSubmissionStatus('Creating order...');
@@ -261,7 +258,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           shipToCode: shipToCode,
           locationCode: locationCode,
           salesPersonCode: salesPerson.code,
-        requestedDeliveryDate: deliveryDate,
         );
       } catch (headerError) {
         print('Error creating sales order header: $headerError');
@@ -328,23 +324,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         } else {
           _submissionStatus = 'Order created with some issues';
         }
-      });
-
-      // Show appropriate message
+      });      // Show appropriate message
       if (isCurrentlyMounted) {
         if (failedItems.isEmpty) {
           // All items added successfully
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Order submitted successfully!'),
-              backgroundColor: Color(0xFF008000),
-            ),
-          );
+          // First close the create order screen
+          Navigator.of(context).pop();
           
-          // Show order summary dialog
+          // Then show the success dialog
           _showOrderSummaryDialog(orderNo);
         } else {
-          // Some items failed, show partial success dialog
+          // For partial success, close screen then show dialog
+          Navigator.of(context).pop();
+          
+          // Show partial success dialog
           _showPartialSuccessDialog(orderNo, failedItems);
         }
       }
@@ -589,98 +582,158 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ],
       ),
     );
-  }
-
-  // Show order summary dialog
+  }  // Show order summary dialog
   void _showOrderSummaryDialog(String orderNo) {
     showDialog(
       context: context,
       barrierDismissible: false, // User must tap button to close dialog
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 28),
-              const SizedBox(width: 8),
-              const Text('Order Placed Successfully'),
-            ],
-          ),
-          content: SingleChildScrollView(
+        // Get screen size for responsive design
+        final screenSize = MediaQuery.of(context).size;
+        final dialogWidth = screenSize.width < 600 
+            ? screenSize.width * 0.9  // 90% of screen width on small screens
+            : 550.0;                  // Fixed width on larger screens
+            
+        return Dialog(
+          // Set maximum width to prevent overflow
+          insetPadding: EdgeInsets.symmetric(horizontal: screenSize.width * 0.05, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            width: dialogWidth,
+            constraints: BoxConstraints(
+              maxWidth: dialogWidth,
+              maxHeight: screenSize.height * 0.8, // Limit height to 80% of screen height
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Order Number: $orderNo', 
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                
-                Text('Customer: ${_orderData['customer']}'),
-                Text('Location: ${_orderData['location']}'),
-                
-                const Divider(height: 24),
-                
-                const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                
-                // List all items
-                ..._orderData['items'].map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
+                // Title bar with fixed height
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2C5F2D),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('• '),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${item['itemDescription']} (${item['itemNo']})'),
-                            Text(
-                              '${item['quantity']} ${item['unitOfMeasure']} x ₹${item['price'].toStringAsFixed(2)} = ₹${item['totalAmount'].toStringAsFixed(2)}',
-                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                            ),
-                          ],
+                      const Icon(Icons.check_circle, color: Colors.white, size: 24),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Order Placed Successfully',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                )).toList(),
-                
-                const Divider(height: 24),
-                
-                // Total amount
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total Amount:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(
-                      '₹${_orderTotal.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
                 ),
+                
+                // Content area with scrolling
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Order Number: $orderNo', 
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        
+                        // Customer and Location with text overflow handling
+                        Text(
+                          'Customer: ${_orderData['customer']}',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                        Text(
+                          'Location: ${_orderData['location']}',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                        
+                        const Divider(height: 24),
+                        
+                        const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        
+                        // List all items with proper overflow handling
+                        ..._orderData['items'].map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('• '),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${item['itemDescription']} (${item['itemNo']})',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 2,
+                                    ),                                    Text(
+                                      '${item['quantity']} ${item['unitOfMeasure']} x ${_formatCurrency(item['price'] as double)} = ${_formatCurrency(item['totalAmount'] as double)}',
+                                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )).toList(),
+                        
+                        const Divider(height: 24),
+                        
+                        // Total amount
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total Amount:', style: TextStyle(fontWeight: FontWeight.bold)),                            Text(
+                              _formatCurrency(_orderTotal),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Action buttons
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Close dialog
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF008000),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
-          actions: [
-            ElevatedButton(
-              child: const Text('Close'),
-              onPressed: () {
-      // First close the dialog, then go back to previous screen
-      Navigator.of(context).pop(); // Close dialog
-      // Use popUntil to go back to the correct screen (e.g. orders screen)
-      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
-    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF008000),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
         );
       },
     );
-  }
-  // Show partial success dialog when some items failed to be added
+  }  // Show partial success dialog when some items failed to be added
   void _showPartialSuccessDialog(String orderNo, List<String> failedItems) {
     // Use try-catch to handle any widget tree issues
     try {
@@ -754,11 +807,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 child: ElevatedButton(
                   child: const Text('Close'),
                   onPressed: () {
-      // First close the dialog, then go back to previous screen
-      Navigator.of(context).pop(); // Close dialog
-      // Use popUntil to go back to the correct screen (e.g. orders screen)
-      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
-    },
+                    // Close dialog
+                    Navigator.of(context).pop();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
@@ -784,8 +835,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         print('Failed to show snackbar: $snackbarError');
       }
     }
-  }
-  // Show error dialog when order creation fails
+  }  // Show error dialog when order creation fails
   void _showErrorDialog(String errorMessage) {
     try {
       showDialog(
@@ -863,11 +913,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     child: ElevatedButton(
                       child: const Text('Go Back'),
                       onPressed: () {
-      // First close the dialog, then go back to previous screen
-      Navigator.of(context).pop(); // Close dialog
-      // Use popUntil to go back to the correct screen (e.g. orders screen)
-      Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name == '/sales');
-    },
+                        Navigator.of(context).pop(); // Close dialog
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,

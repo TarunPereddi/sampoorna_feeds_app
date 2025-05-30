@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import 'order_detail_view.dart';
-import 'edit_order_screen.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -40,42 +39,8 @@ class OrderTableView extends StatelessWidget {
                   DataCell(Text(order['customerName'] as String)),
                   DataCell(Text(order['date'] as String)),
                   DataCell(Text(order['amount'] as String)),
-                  DataCell(_buildStatusChip(order['status'] as String)),                  DataCell(
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Add Send for Approval button only for Open orders
-                        if (order['status'] == 'Open')
-                          IconButton(
-                            icon: const Icon(Icons.check_circle, size: 20),
-                            onPressed: () {
-                              // Show send for approval confirmation
-                              _showSendForApprovalDialog(context, order['id']);
-                            },
-                            tooltip: 'Send for Approval',
-                            color: Colors.green,
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.visibility, size: 20),
-                          onPressed: () {
-                            // View order details
-                            _showViewOrderDialog(context, order);
-                          },
-                          tooltip: 'View Details',
-                          color: Colors.blue,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 20),
-                          onPressed: () {
-                            // Edit order
-                            _showEditOrderDialog(context, order);
-                          },
-                          tooltip: 'Edit Order',
-                          color: Colors.orange,
-                        ),
-                      ],
-                    ),
-                  ),
+                  DataCell(_buildStatusChip(order['status'] as String)),
+                  DataCell(_buildActionButtons(context, order)),
                 ],
               );
             }).toList(),
@@ -123,6 +88,90 @@ class OrderTableView extends StatelessWidget {
       ),
     );
   }
+
+  // Build responsive action buttons for table view
+  Widget _buildActionButtons(BuildContext context, Map<String, dynamic> order) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600; // Table view threshold is higher
+
+    // Get buttons based on order status
+    List<Widget> buttons = _getActionButtons(context, order, isSmallScreen);
+
+    if (isSmallScreen) {
+      // For small screens, use more compact layout
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: buttons,
+      );
+    } else {
+      // For larger screens, use normal spacing
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: buttons,
+      );
+    }
+  }
+
+  // Get action buttons based on order status and screen size
+  List<Widget> _getActionButtons(BuildContext context, Map<String, dynamic> order, bool isSmallScreen) {
+    List<Widget> buttons = [];    // Send for Approval button (only for Open orders)
+    if (order['status'] == 'Open') {
+      buttons.add(        IconButton(
+          onPressed: () => _showSendForApprovalDialog(context, order['id']),
+          icon: Icon(Icons.check_circle, size: isSmallScreen ? 16 : 18),
+          tooltip: 'Send for Approval',
+          color: Colors.green,
+          constraints: BoxConstraints(
+            minWidth: isSmallScreen ? 32 : 36,
+            minHeight: isSmallScreen ? 32 : 36
+          ),
+        ),
+      );
+    }
+
+    // Reopen button (for Pending Approval or Released orders) - positioned near approval
+    if (order['status'] == 'Pending Approval' || order['status'] == 'Released') {
+      buttons.add(        IconButton(
+          onPressed: () => _showReopenOrderDialog(context, order['id']),
+          icon: Icon(Icons.refresh, size: isSmallScreen ? 16 : 18),
+          tooltip: 'Reopen Order',
+          color: Colors.purple,
+          constraints: BoxConstraints(
+            minWidth: isSmallScreen ? 32 : 36,
+            minHeight: isSmallScreen ? 32 : 36
+          ),
+        ),
+      );
+    }
+
+    // View button
+    buttons.add(      IconButton(
+        onPressed: () => _showViewOrderDialog(context, order),
+        icon: Icon(Icons.visibility, size: isSmallScreen ? 16 : 18),
+        tooltip: 'View Details',
+        color: Colors.blue,
+        constraints: BoxConstraints(
+          minWidth: isSmallScreen ? 32 : 36,
+          minHeight: isSmallScreen ? 32 : 36
+        ),
+      ),
+    );
+
+    // Edit button
+    buttons.add(      IconButton(
+        onPressed: () => _showEditOrderDialog(context, order),
+        icon: Icon(Icons.edit, size: isSmallScreen ? 16 : 18),
+        tooltip: 'Edit Order',
+        color: Colors.orange,
+        constraints: BoxConstraints(
+          minWidth: isSmallScreen ? 32 : 36,
+          minHeight: isSmallScreen ? 32 : 36
+        ),
+      ),);
+
+    return buttons;
+  }
+
   // Show view order dialog
   void _showViewOrderDialog(BuildContext context, Map<String, dynamic> order) {
     showDialog(
@@ -145,152 +194,65 @@ class OrderTableView extends StatelessWidget {
       ),
     );
   }
-  // This method is no longer needed since we're using OrderDetailView
+
   // Show edit order dialog
-// Process reopening and then navigate to edit screen
-Future<void> _reopenOrderAndNavigateToEdit(BuildContext context, Map<String, dynamic> order) async {
-  // Store dialog context to ensure it can be closed even if parent context is disposed
-  BuildContext? dialogContext;
-  
-  // Show loading dialog
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      dialogContext = context;
-      return AlertDialog(
-        content: Row(
+  void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
           children: [
-            const CircularProgressIndicator(color: Colors.orange),
-            const SizedBox(width: 16),
-            Text('Reopening order ${order['id']}...'),
+            const Icon(Icons.edit, color: Colors.orange),
+            const SizedBox(width: 8),
+            const Text('Edit Order'),
           ],
         ),
-      );
-    },
-  );
-  
-  final apiService = ApiService();
-  
-  try {
-    // Call the API to reopen the order
-    final result = await apiService.reopenSalesOrder(order['id']);
-    
-    // Make sure to close the dialog
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    }
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to edit? Editing will reopen the order.',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Order ID: ${order['id']}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Order reopened successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    
-    // Navigate to edit screen
-    _navigateToEditScreen(context, order);
-    
-    // Refresh the orders list if callback is provided
-    if (onRefresh != null) {
-      onRefresh!();
-    }
-  } catch (e) {
-    // Make sure to close the dialog
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    // Show error message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Failed to reopen order: $e'),
-        backgroundColor: Colors.red,
+              // Navigate using the named route
+              Navigator.of(context).pushNamed(
+                '/edit_order',
+                arguments: order['id'],
+              ).then((_) {
+                // Refresh the orders list when returning
+                if (onRefresh != null) {
+                  onRefresh!();
+                }
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Edit'),
+          ),
+        ],
       ),
     );
   }
-}
 
-// Navigate to edit screen
-void _navigateToEditScreen(BuildContext context, Map<String, dynamic> order) {
-  // Navigate to the edit screen passing only the order number
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => EditOrderScreen(orderNo: order['id']),
-    ),
-  ).then((_) {
-    // Refresh the orders list when returning from edit screen
-    if (onRefresh != null) {
-      onRefresh!();
-    }
-  });
-}
-// Show edit order dialog with reopening confirmation
-
-
-// Show edit order dialog
-// Show edit order dialog with reopening confirmation
-// Show edit order dialog with confirmation
-// In order_list_view.dart and order_table_view.dart
-
-void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.edit, color: Colors.orange),
-          const SizedBox(width: 8),
-          const Text('Edit Order'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Are you sure you want to edit? Editing will reopen the order.',
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Order ID: ${order['id']}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            
-            // Navigate using the named route
-            Navigator.of(context).pushNamed(
-              '/edit_order',
-              arguments: order['id'],
-            ).then((_) {
-              // Refresh the orders list when returning
-              if (onRefresh != null) {
-                onRefresh!();
-              }
-            });
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-            foregroundColor: Colors.white,
-          ),
-          child: const Text('Edit'),
-        ),
-      ],
-    ),
-  );
-}
-// Show send for approval confirmation dialog
+  // Show send for approval confirmation dialog
   void _showSendForApprovalDialog(BuildContext context, String orderNo) {
     showDialog(
       context: context,
@@ -302,34 +264,45 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
             const Text('Send for Approval'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to send order $orderNo for approval? This action cannot be undone.',
+        content: SingleChildScrollView(
+          child: Text(
+            'Are you sure you want to send order $orderNo for approval? This action cannot be undone.',
+          ),
         ),
+        actionsAlignment: MainAxisAlignment.end, 
         actions: [
           TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _sendOrderForApproval(context, orderNo);
-            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
+            onPressed: () {
+              Navigator.pop(context); 
+              _sendOrderForApproval(context, orderNo); 
+            },
             child: const Text('Send for Approval'),
           ),
         ],
       ),
     );
-  }  // Process the API call to send order for approval
+  }
+
+  // Process the API call to send order for approval
   Future<void> _sendOrderForApproval(BuildContext context, String orderNo) async {
-    // Store dialog context to ensure it can be closed even if parent context is disposed
-    BuildContext? dialogContext;
-    
-    // Show loading dialog
+    BuildContext? dialogContext; // For managing the loading dialog
+    // CORRECTED: Capture ScaffoldMessengerState before await
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -340,44 +313,216 @@ void _showEditOrderDialog(BuildContext context, Map<String, dynamic> order) {
             children: [
               const CircularProgressIndicator(color: Colors.green),
               const SizedBox(width: 16),
-              Text('Sending order $orderNo for approval...'),
+              Expanded(child: Text('Sending order $orderNo for approval...')), // Use Expanded for text
             ],
           ),
         );
       },
     );
-    
-    final apiService = ApiService();
-    
-    // Call the API - the sendOrderForApproval method now returns a structured response
-    final result = await apiService.sendOrderForApproval(orderNo);
-    
-    // Make sure to close the dialog - if dialogContext is null use normal context
-    if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
-      Navigator.of(dialogContext!).pop();
-    } else if (Navigator.canPop(context)) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
 
-    // Handle the result
-    if (result['success'] == true) {
-      // Show success message with API response message if available
-      ScaffoldMessenger.of(context).showSnackBar(
+    final apiService = ApiService();
+    try {
+      final result = await apiService.sendOrderForApproval(orderNo);
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog
+      }
+
+      if (result['success'] == true) {
+        // CORRECTED: Use captured scaffoldMessenger
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Order sent for approval successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        if (onRefresh != null) {
+          onRefresh!(); // Trigger refresh
+        }      } else {
+        // CORRECTED: Use captured scaffoldMessenger
+        String errorMessage = result['message'] ?? "Unknown error";
+        
+        // Extract message from JSON error and remove CorrelationId
+        if (errorMessage.contains('"message"')) {
+          try {
+            final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+            final match = messageRegex.firstMatch(errorMessage);
+            if (match != null && match.groupCount >= 1) {
+              errorMessage = match.group(1)!;
+            }
+          } catch (e) {
+            // If parsing fails, use original message
+          }
+        }
+        
+        // Remove CorrelationId and everything after it
+        if (errorMessage.contains('CorrelationId')) {
+          errorMessage = errorMessage.split('CorrelationId')[0].trim();
+          // Remove trailing period if present
+          if (errorMessage.endsWith('.')) {
+            errorMessage = errorMessage.substring(0, errorMessage.length - 1);
+          }
+        }
+        
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(errorMessage.isEmpty ? "Failed to send order for approval" : errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }    } catch (e) {
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog on error
+      }
+      // CORRECTED: Use captured scaffoldMessenger
+      String errorMessage = e.toString();
+      
+      // Extract message from JSON error and remove CorrelationId
+      if (errorMessage.contains('"message"')) {
+        try {
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorMessage);
+          if (match != null && match.groupCount >= 1) {
+            errorMessage = match.group(1)!;
+          }
+        } catch (parseError) {
+          // If parsing fails, use original message
+        }
+      }
+      
+      // Remove CorrelationId and everything after it
+      if (errorMessage.contains('CorrelationId')) {
+        errorMessage = errorMessage.split('CorrelationId')[0].trim();
+        // Remove trailing period if present
+        if (errorMessage.endsWith('.')) {
+          errorMessage = errorMessage.substring(0, errorMessage.length - 1);
+        }
+      }
+      
+      scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Order sent for approval successfully!'),
+          content: Text(errorMessage.isEmpty ? "An error occurred" : errorMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Show reopen order confirmation dialog
+  void _showReopenOrderDialog(BuildContext context, String orderNo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.refresh, color: Colors.purple),
+            const SizedBox(width: 8),
+            const Text('Reopen Order'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            'Are you sure you want to reopen order $orderNo? This will set its status back to Open.',
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.end, 
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjusted padding
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              Navigator.pop(context); 
+              _reopenOrder(context, orderNo); 
+            },
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Process the API call to reopen order
+  Future<void> _reopenOrder(BuildContext context, String orderNo) async {
+    BuildContext? dialogContext; // For managing the loading dialog
+    // CORRECTED: Capture ScaffoldMessengerState before await
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        dialogContext = context;
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(color: Colors.purple),
+              const SizedBox(width: 16),
+              Expanded(child: Text('Reopening order $orderNo...')), // Use Expanded for text
+            ],
+          ),
+        );
+      },
+    );
+
+    final apiService = ApiService();
+    try {
+      await apiService.reopenSalesOrder(orderNo);
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog
+      }
+
+      // CORRECTED: Use captured scaffoldMessenger
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Order reopened successfully!'),
           backgroundColor: Colors.green,
         ),
       );
-      
-      // Refresh the orders list if callback is provided
       if (onRefresh != null) {
-        onRefresh!();
+        onRefresh!(); // Trigger refresh
+      }    } catch (e) {
+      if (dialogContext != null && Navigator.of(dialogContext!).canPop()) {
+        Navigator.of(dialogContext!).pop(); // Close loading dialog on error
       }
-    } else {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
+      // CORRECTED: Use captured scaffoldMessenger
+      String errorMessage = e.toString();
+      
+      // Extract message from JSON error and remove CorrelationId
+      if (errorMessage.contains('"message"')) {
+        try {
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorMessage);
+          if (match != null && match.groupCount >= 1) {
+            errorMessage = match.group(1)!;
+          }
+        } catch (parseError) {
+          // If parsing fails, use original message
+        }
+      }
+      
+      // Remove CorrelationId and everything after it
+      if (errorMessage.contains('CorrelationId')) {
+        errorMessage = errorMessage.split('CorrelationId')[0].trim();
+        // Remove trailing period if present
+        if (errorMessage.endsWith('.')) {
+          errorMessage = errorMessage.substring(0, errorMessage.length - 1);
+        }
+      }
+      
+      scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Failed to send order for approval: ${result['message'] ?? "Unknown error"}'),
+          content: Text(errorMessage.isEmpty ? "Failed to reopen order" : errorMessage),
           backgroundColor: Colors.red,
         ),
       );
