@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../../services/api_service.dart';
-import 'package:intl/intl.dart';
 
 class OrderDetailView extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -22,19 +21,13 @@ class _OrderDetailViewState extends State<OrderDetailView> {
   bool _isLoading = true;
   List<dynamic> _orderLines = [];
   String? _error;
-
- // Indian Rupee currency formatter
-  final _currencyFormat = NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: '₹',
-    decimalDigits: 2,
-  );
-
   @override
   void initState() {
     super.initState();
     _loadOrderLines();
-  }  Future<void> _loadOrderLines() async {
+  }
+
+  Future<void> _loadOrderLines() async {
     setState(() {
       _isLoading = true;
       _error = null;
@@ -99,11 +92,10 @@ class _OrderDetailViewState extends State<OrderDetailView> {
           columnWidths: const {
             0: FlexColumnWidth(1),
             1: FlexColumnWidth(2),
-          },
-          children: [
+          },          children: [
             _buildTableRow('Customer', widget.order['customerName']),
             _buildTableRow('Date', widget.order['date']),
-            _buildTableRow('Amount', _currencyFormat.format(widget.order['amount'])),
+            _buildTableRow('Amount', _formatCurrency(widget.order['amount'])),
             // Add delivery address information if available in the order data
             if (widget.order['address'] != null)
               _buildTableRow('Address', widget.order['address']),

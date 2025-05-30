@@ -5,7 +5,7 @@ import '../../utils/app_colors.dart';
 import 'home/home_screen.dart';
 import 'orders/orders_screen.dart';  // Using our optimized screen
 import 'customers/customers_screen.dart';
-import 'queries/queries_screen.dart';
+// import 'queries/queries_screen.dart'; // Commented out - queries tab removed
 import 'profile/profile_screen.dart';
 import 'orders/edit_order_screen.dart';
 import '../../services/auth_service.dart';
@@ -31,14 +31,13 @@ class SalesShell extends StatefulWidget {
 
 class _SalesShellState extends State<SalesShell> {
   late int _selectedIndex;
-  
-  // Maintain separate navigation keys for each tab to enable
+    // Maintain separate navigation keys for each tab to enable
   // independent navigation stacks
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
-    GlobalKey<NavigatorState>(),
+    // GlobalKey<NavigatorState>(), // Queries tab commented out
     GlobalKey<NavigatorState>(),
   ];
 
@@ -135,9 +134,7 @@ class _SalesShellState extends State<SalesShell> {
                             },
                           ),
                   ),
-                ),
-
-                // Customers Tab
+                ),                // Customers Tab
                 Offstage(
                   offstage: _selectedIndex != 2,
                   child: RepaintBoundary(
@@ -150,7 +147,8 @@ class _SalesShellState extends State<SalesShell> {
                   ),
                 ),
 
-                // Queries Tab
+                // Queries Tab - COMMENTED OUT
+                /*
                 Offstage(
                   offstage: _selectedIndex != 3,
                   child: RepaintBoundary(
@@ -162,15 +160,16 @@ class _SalesShellState extends State<SalesShell> {
                           ),
                   ),
                 ),
+                */
 
                 // Profile Tab
                 Offstage(
-                  offstage: _selectedIndex != 4,
+                  offstage: _selectedIndex != 3, // Changed from 4 to 3
                   child: RepaintBoundary(
-                    child: _navigatorKeys[4].currentState == null && _selectedIndex != 4
+                    child: _navigatorKeys[3].currentState == null && _selectedIndex != 3 // Changed from 4 to 3
                         ? Container() // Don't build if not visible and not initialized
                         : _buildTabNavigator(
-                            4,
+                            3, // Changed from 4 to 3
                             (context) => const ProfileScreen(),
                           ),
                   ),
@@ -200,8 +199,7 @@ class _SalesShellState extends State<SalesShell> {
                         _selectedIndex = index;
                       });
                     }
-                  },
-                  items: const [
+                  },                  items: const [
                     BottomNavigationBarItem(
                       icon: Icon(Icons.home),
                       label: 'Home',
@@ -214,10 +212,10 @@ class _SalesShellState extends State<SalesShell> {
                       icon: Icon(Icons.person_search),
                       label: 'Customers',
                     ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.question_answer),
-                      label: 'Queries',
-                    ),
+                    // BottomNavigationBarItem( // Queries tab commented out
+                    //   icon: Icon(Icons.question_answer),
+                    //   label: 'Queries',
+                    // ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.person),
                       label: 'Profile',
