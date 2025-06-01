@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
-import 'order_detail_view.dart';
 import 'edit_order_screen.dart';
+import 'view_order_screen.dart';
  
 class OrderListView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -222,12 +222,11 @@ class OrderListView extends StatelessWidget {
       );
       if (!isSmallScreen && buttons.isNotEmpty) buttons.add(const SizedBox(width: 8)); 
     }
-    
-    // View button
+      // View button
     buttons.add(
       isSmallScreen
         ? TextButton.icon(
-            onPressed: () => _showViewOrderDetails(context, order),
+            onPressed: () => _navigateToViewOrder(context, order),
             icon: const Icon(Icons.visibility, size: smallScreenIconSize),
             label: const Text('View', style: TextStyle(fontSize: smallScreenFontSize), textAlign: TextAlign.center),
             style: TextButton.styleFrom(
@@ -237,7 +236,7 @@ class OrderListView extends StatelessWidget {
             ),
           )
         : TextButton.icon(
-            onPressed: () => _showViewOrderDetails(context, order),
+            onPressed: () => _navigateToViewOrder(context, order),
             icon: const Icon(Icons.visibility, size: 16),
             label: const Text('View', style: TextStyle(fontSize: 12)),
             style: TextButton.styleFrom(
@@ -338,37 +337,13 @@ class OrderListView extends StatelessWidget {
         ),
       ),    );
   }
-
-  // Show order details dialog
-  void _showViewOrderDetails(BuildContext context, Map<String, dynamic> order) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  // Navigate to view order screen
+  void _navigateToViewOrder(BuildContext context, Map<String, dynamic> order) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ViewOrderScreen(orderNo: order['id']),
       ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          minChildSize: 0.4,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ListView(
-                controller: scrollController,
-                children: [
-                  OrderDetailView(
-                    order: order,
-                    onEdit: () => _showEditOrderDialog(context, order),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 

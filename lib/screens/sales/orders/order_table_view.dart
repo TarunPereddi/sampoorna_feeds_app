@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
-import 'order_detail_view.dart';
+import 'view_order_screen.dart';
 
 class OrderTableView extends StatelessWidget {
   final List<Map<String, dynamic>> orders;
@@ -142,11 +142,9 @@ class OrderTableView extends StatelessWidget {
           ),
         ),
       );
-    }
-
-    // View button
+    }    // View button
     buttons.add(      IconButton(
-        onPressed: () => _showViewOrderDialog(context, order),
+        onPressed: () => _navigateToViewOrder(context, order),
         icon: Icon(Icons.visibility, size: isSmallScreen ? 16 : 18),
         tooltip: 'View Details',
         color: Colors.blue,
@@ -171,26 +169,12 @@ class OrderTableView extends StatelessWidget {
 
     return buttons;
   }
-
-  // Show view order dialog
-  void _showViewOrderDialog(BuildContext context, Map<String, dynamic> order) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.8,
-          padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView(
-            child: OrderDetailView(
-              order: order,
-              onEdit: () {
-                Navigator.pop(context);
-                _showEditOrderDialog(context, order);
-              },
-            ),
-          ),
-        ),
+  // Navigate to view order screen
+  void _navigateToViewOrder(BuildContext context, Map<String, dynamic> order) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ViewOrderScreen(orderNo: order['id']),
       ),
     );
   }

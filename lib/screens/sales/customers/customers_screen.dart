@@ -7,6 +7,7 @@ import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/customer.dart';
+import '../../../mixins/tab_refresh_mixin.dart';
 import 'customer_detail_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class CustomersScreen extends StatefulWidget {
   State<CustomersScreen> createState() => _CustomersScreenState();
 }
 
-class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAliveClientMixin {
+class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAliveClientMixin, TabRefreshMixin {
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebouncer;  
@@ -31,12 +32,20 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
   int _totalItems = 0;
   int _itemsPerPage = 10;
   int _totalPages = 1;
-  
-  // Filters
-  bool _showBlockedOnly = false;
-  bool _hideBlocked = false;  
-  @override
+    // Filters - commented out to show all results by default
+  // bool _showBlockedOnly = false;
+  // bool _hideBlocked = false;  @override
   bool get wantKeepAlive => true;
+
+  // TabRefreshMixin implementation
+  @override
+  int get tabIndex => 2; // Customers tab index
+
+  @override
+  Future<void> performRefresh() async {
+    debugPrint('CustomersScreen: Performing refresh');
+    await _loadCustomers(resetPage: true);
+  }
 
   @override
   void initState() {
@@ -85,16 +94,16 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         _performSearch();
       }
     });
-  }  // Get filter parameter for API call based on selected filter
-  String? _getFilterParameter() {
-    if (_showBlockedOnly) {
-      return "Blocked ne ''"; // Find customers where blocked field is not empty
-    } else if (_hideBlocked) {
-      return "Blocked eq ''"; // Find customers where blocked field is empty
-    }
-    
-    return null; // No filter for "All" option
-  }
+  }  // Get filter parameter for API call based on selected filter - commented out to show all results
+  // String? _getFilterParameter() {
+  //   if (_showBlockedOnly) {
+  //     return "Blocked ne ''"; // Find customers where blocked field is not empty
+  //   } else if (_hideBlocked) {
+  //     return "Blocked eq ''"; // Find customers where blocked field is empty
+  //   }
+  //   
+  //   return null; // No filter for "All" option
+  // }
 
   // Navigate to previous page
   void _previousPage() {
@@ -124,18 +133,18 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         _currentPage = 1;
       }
     });
-    
-    try {
+      try {
       final searchQuery = _searchController.text.trim();
-      final blockFilter = _getFilterParameter();
+      // Removed filter parameter to show all results by default
+      // final blockFilter = _getFilterParameter();
       
       final result = await _apiService.getCustomersWithPagination(
         salesPersonCode: _salesPersonCode,
         searchQuery: searchQuery.isEmpty ? null : searchQuery,
         page: _currentPage,
         pageSize: _itemsPerPage,
-        blockFilter: blockFilter,
-      );      
+        blockFilter: null, // Show all customers regardless of blocked status
+      );
       setState(() {
         _customers = result.items; // API filters for us
         _totalItems = result.totalCount;
@@ -175,21 +184,21 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
   void _clearSearch() {
     _searchController.clear();
     _performSearch();
-  }  // Set filter state and reload data from API
-  void _setFilter({required bool showBlockedOnly, required bool hideBlocked}) {
-    setState(() {
-      _showBlockedOnly = showBlockedOnly;
-      _hideBlocked = hideBlocked;
-    });
-    
-    // Reset to page 1 when changing filters
-    setState(() {
-      _currentPage = 1;
-    });
-    
-    // Load new data with filter applied
-    _loadCustomers();
-  }
+  }  // Set filter state and reload data from API - commented out to show all results
+  // void _setFilter({required bool showBlockedOnly, required bool hideBlocked}) {
+  //   setState(() {
+  //     _showBlockedOnly = showBlockedOnly;
+  //     _hideBlocked = hideBlocked;
+  //   });
+  //   
+  //   // Reset to page 1 when changing filters
+  //   setState(() {
+  //     _currentPage = 1;
+  //   });
+  //   
+  //   // Load new data with filter applied
+  //   _loadCustomers();
+  // }
 
   // Refresh data
   Future<void> _refreshData() async {
@@ -207,13 +216,12 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
       ),
     );
   }
-
-  // Build pagination controls
+  // Build pagination controls - made smaller and more compact
   Widget _buildPaginationControls() {
     if (_totalItems == 0) return const SizedBox.shrink();
     
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -223,50 +231,54 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Total items info
+          // Total items info - smaller text
           Text(
             '$_totalItems customers',
             style: TextStyle(
               color: Colors.grey.shade600,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
             ),
           ),
           
-          // Navigation controls
+          // Navigation controls - smaller and more compact
           Row(
             children: [
-              // Previous page button
+              // Previous page button - smaller
               IconButton(
                 icon: const Icon(Icons.chevron_left),
                 onPressed: _currentPage > 1 ? _previousPage : null,
                 tooltip: 'Previous Page',
-                iconSize: 24,
+                iconSize: 20,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.all(4),
                 color: _currentPage > 1 ? const Color(0xFF2C5F2D) : Colors.grey.shade400,
               ),
               
-              // Page indicator
+              // Page indicator - smaller and more compact
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   '$_currentPage / $_totalPages',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: 12,
                   ),
                 ),
               ),
               
-              // Next page button
+              // Next page button - smaller
               IconButton(
                 icon: const Icon(Icons.chevron_right),
                 onPressed: _currentPage < _totalPages ? _nextPage : null,
                 tooltip: 'Next Page',
-                iconSize: 24,
+                iconSize: 20,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.all(4),
                 color: _currentPage < _totalPages ? const Color(0xFF2C5F2D) : Colors.grey.shade400,
               ),
             ],
@@ -274,7 +286,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         ],
       ),
     );
-  }  
+  }
   // Make a phone call
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
@@ -301,50 +313,50 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         );
       }
     }
-  }  // Build filter buttons
-  Widget _buildFilterButtons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          // All customers button
-          FilterChip(
-            label: const Text('All'),
-            selected: !_showBlockedOnly && !_hideBlocked,
-            onSelected: (_) => _setFilter(showBlockedOnly: false, hideBlocked: false),
-            backgroundColor: Colors.grey.shade100,
-            selectedColor: const Color(0xFF2C5F2D).withOpacity(0.2),
-            checkmarkColor: const Color(0xFF2C5F2D),
-            tooltip: 'Show all customers',
-          ),
-          const SizedBox(width: 8),
-          
-          // Hide blocked button
-          FilterChip(
-            label: const Text('Active Only'),
-            selected: _hideBlocked,
-            onSelected: (_) => _setFilter(showBlockedOnly: false, hideBlocked: true),
-            backgroundColor: Colors.grey.shade100,
-            selectedColor: Colors.green.shade100,
-            checkmarkColor: Colors.green.shade700,
-            tooltip: 'Show only active customers',
-          ),
-          const SizedBox(width: 8),
-          
-          // Show blocked only button
-          FilterChip(
-            label: const Text('Blocked Only'),
-            selected: _showBlockedOnly,
-            onSelected: (_) => _setFilter(showBlockedOnly: true, hideBlocked: false),
-            backgroundColor: Colors.grey.shade100,
-            selectedColor: Colors.red.shade100,
-            checkmarkColor: Colors.red.shade700,
-            tooltip: 'Show only blocked customers',
-          ),
-        ],
-      ),
-    );
-  }
+  }  // Build filter buttons - commented out to show all results by default
+  // Widget _buildFilterButtons() {
+  //   return Container(
+  //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     child: Row(
+  //       children: [
+  //         // All customers button
+  //         FilterChip(
+  //           label: const Text('All'),
+  //           selected: !_showBlockedOnly && !_hideBlocked,
+  //           onSelected: (_) => _setFilter(showBlockedOnly: false, hideBlocked: false),
+  //           backgroundColor: Colors.grey.shade100,
+  //           selectedColor: const Color(0xFF2C5F2D).withOpacity(0.2),
+  //           checkmarkColor: const Color(0xFF2C5F2D),
+  //           tooltip: 'Show all customers',
+  //         ),
+  //         const SizedBox(width: 8),
+  //         
+  //         // Hide blocked button
+  //         FilterChip(
+  //           label: const Text('Active Only'),
+  //           selected: _hideBlocked,
+  //           onSelected: (_) => _setFilter(showBlockedOnly: false, hideBlocked: true),
+  //           backgroundColor: Colors.grey.shade100,
+  //           selectedColor: Colors.green.shade100,
+  //           checkmarkColor: Colors.green.shade700,
+  //           tooltip: 'Show only active customers',
+  //         ),
+  //         const SizedBox(width: 8),
+  //         
+  //         // Show blocked only button
+  //         FilterChip(
+  //           label: const Text('Blocked Only'),
+  //           selected: _showBlockedOnly,
+  //           onSelected: (_) => _setFilter(showBlockedOnly: true, hideBlocked: false),
+  //           backgroundColor: Colors.grey.shade100,
+  //           selectedColor: Colors.red.shade100,
+  //           checkmarkColor: Colors.red.shade700,
+  //           tooltip: 'Show only blocked customers',
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
   // Build customer card widget
   Widget _buildCustomerCard(Customer customer, bool isBlocked) {
     return Card(
@@ -628,35 +640,35 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                 ],
               ],
             ),
-          ),
-
-          // Filter Buttons
-          _buildFilterButtons(),          // Results Summary
-          if (_totalItems > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Showing ${_customers.length} of $_totalItems customers',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (_totalPages > 1)
-                    Text(
-                      'Page $_currentPage of $_totalPages',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+          ),          // Filter Buttons - commented out to show all results by default
+          // _buildFilterButtons(),
+          
+          // Results Summary - commented out to remove the showing X of Y customers bar
+          // if (_totalItems > 0)
+          //   Container(
+          //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          //     child: Row(
+          //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //       children: [
+          //         Text(
+          //           'Showing ${_customers.length} of $_totalItems customers',
+          //           style: TextStyle(
+          //             color: Colors.grey.shade700,
+          //             fontSize: 14,
+          //             fontWeight: FontWeight.w500,
+          //           ),
+          //         ),
+          //         if (_totalPages > 1)
+          //           Text(
+          //             'Page $_currentPage of $_totalPages',
+          //             style: TextStyle(
+          //               color: Colors.grey.shade600,
+          //               fontSize: 12,
+          //             ),
+          //           ),
+          //       ],
+          //     ),
+          //   ),
 
           // Customer List
           Expanded(

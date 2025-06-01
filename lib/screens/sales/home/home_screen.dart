@@ -8,6 +8,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/navigation_service.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/error_dialog.dart';
+import '../../../mixins/tab_refresh_mixin.dart';
 import '../orders/create_order_screen.dart';
 import '../orders/order_list_view.dart'; // Added import
 import '../orders/order_table_view.dart'; // Added import
@@ -19,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {  final ApiService _apiService = ApiService();
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin, TabRefreshMixin {  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   List<dynamic> _recentOrders = [];
   bool _dataLoaded = false; // Track if data has been loaded
@@ -31,19 +32,28 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     'releasedOrders': 0,
     'openOrders': 0,
   };
-  
-  @override
+    @override
   bool get wantKeepAlive => true; // Keep the state when switching tabs
+
+  // TabRefreshMixin implementation
+  @override
+  int get tabIndex => 0; // Home tab index
+
+  @override
+  Future<void> performRefresh() async {
+    debugPrint('HomeScreen: Performing refresh');
+    await _loadDashboardData();
+  }
+
   @override
   void initState() {
     super.initState();
     // We'll load data when the widget becomes visible
   }
-  
-  @override
+    @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Only load data if this is the first time or we're coming back to this tab
+    // Only load data if this is the first time
     if (!_dataLoaded) {
       _loadDashboardData();
       _dataLoaded = true;
@@ -235,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               onSelected: (value) {
                 if (value == 'profile') {
                   // Navigate to profile tab using NavigationService
-                  NavigationService.navigateToTab(context, 4);
+                  NavigationService.navigateToTab(context, 3);
                 } else if (value == 'logout') {
                   _showLogoutDialog(context, authService);
                 }

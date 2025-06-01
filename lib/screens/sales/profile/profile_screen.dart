@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../mixins/tab_refresh_mixin.dart';
 import '../../../utils/app_colors.dart';
-import '../../login/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,16 +13,30 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final ApiService _apiService = ApiService();
+class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   String? _errorMessage;
   Map<String, dynamic>? _salesPersonDetails;
 
+  // TabRefreshMixin implementation
+  @override
+  int get tabIndex => 3; // Profile tab index
+
+  @override
+  Future<void> performRefresh() async {
+    debugPrint('ProfileScreen: Performing refresh');
+    await _loadProfileData();
+  }
   @override
   void initState() {
     super.initState();
     _loadProfileData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This ensures TabRefreshMixin can check for refreshes
   }
 
   Future<void> _loadProfileData() async {
@@ -557,16 +571,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-              onPressed: () {
+              ),              onPressed: () async {
                 // Logout user and navigate to login screen
                 final authService = Provider.of<AuthService>(context, listen: false);
-                authService.logout();
+                await authService.logout();
                 
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
+                if (context.mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/login',
+                    (route) => false,
+                  );
+                }
               },
               child: const Text('Logout'),
             ),

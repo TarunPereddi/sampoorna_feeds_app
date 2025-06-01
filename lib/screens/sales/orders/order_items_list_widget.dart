@@ -151,19 +151,31 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
             padding: const EdgeInsets.all(12.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              children: [                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text(
-                        item['itemNo'] as String,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: cannotDelete ? Colors.red.shade800 : null,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['itemNo'] as String,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: cannotDelete ? Colors.red.shade800 : null,
+                            ),
+                          ),
+                          Text(
+                            item['itemDescription'] as String,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: cannotDelete ? Colors.red.shade600 : Colors.grey.shade700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
+                        ],
                       ),
                     ),
                     cannotDelete
@@ -279,7 +291,7 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
           return DataRow(
             cells: [
               DataCell(Text('${index + 1}')),
-              DataCell(Text(item['itemNo'] as String)),
+              DataCell(Text('${item['itemNo']} - ${item['itemDescription']}')),
               DataCell(Text(item['unitOfMeasure'] as String)),
               DataCell(Text(item['quantity'].toString())),              DataCell(Text(_formatCurrency(item['mrp'] as double))),
               DataCell(Text(_formatCurrency(item['price'] as double))),

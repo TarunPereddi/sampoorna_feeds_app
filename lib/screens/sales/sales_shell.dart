@@ -9,6 +9,7 @@ import 'customers/customers_screen.dart';
 import 'profile/profile_screen.dart';
 import 'orders/edit_order_screen.dart';
 import '../../services/auth_service.dart';
+import '../../providers/tab_refresh_provider.dart';
 
 class SalesShell extends StatefulWidget {
   final int initialTabIndex;
@@ -175,52 +176,60 @@ class _SalesShellState extends State<SalesShell> {
                   ),
                 ),
               ],
-            ),            bottomNavigationBar: LayoutBuilder(
-              builder: (context, constraints) {
-                final isSmallScreen = constraints.maxWidth < 360;
-                
-                return BottomNavigationBar(
-                  backgroundColor: AppColors.primaryLight,
-                  selectedItemColor: AppColors.primaryDark,
-                  unselectedItemColor: AppColors.grey600,
-                  currentIndex: _selectedIndex,
-                  type: BottomNavigationBarType.fixed,
-                  selectedFontSize: isSmallScreen ? 11 : 12,
-                  unselectedFontSize: isSmallScreen ? 10 : 11,
-                  iconSize: isSmallScreen ? 20 : 24,
-                  onTap: (index) {
-                    // If tapping on the already selected tab and can pop,
-                    // pop to the root of that tab
-                    if (index == _selectedIndex &&
-                        _navigatorKeys[index].currentState?.canPop() == true) {
-                      _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
-                    } else {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
-                    }
-                  },                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.shopping_cart),
-                      label: 'Orders',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person_search),
-                      label: 'Customers',
-                    ),
-                    // BottomNavigationBarItem( // Queries tab commented out
-                    //   icon: Icon(Icons.question_answer),
-                    //   label: 'Queries',
-                    // ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person),
-                      label: 'Profile',
-                    ),
-                  ],
+            ),            bottomNavigationBar: Consumer<TabRefreshProvider>(
+              builder: (context, tabRefreshProvider, child) {
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isSmallScreen = constraints.maxWidth < 360;
+                    
+                    return BottomNavigationBar(
+                      backgroundColor: AppColors.primaryLight,
+                      selectedItemColor: AppColors.primaryDark,
+                      unselectedItemColor: AppColors.grey600,
+                      currentIndex: _selectedIndex,
+                      type: BottomNavigationBarType.fixed,
+                      selectedFontSize: isSmallScreen ? 11 : 12,
+                      unselectedFontSize: isSmallScreen ? 10 : 11,
+                      iconSize: isSmallScreen ? 20 : 24,
+                      onTap: (index) {
+                        // If tapping on the already selected tab and can pop,
+                        // pop to the root of that tab
+                        if (index == _selectedIndex &&
+                            _navigatorKeys[index].currentState?.canPop() == true) {
+                          _navigatorKeys[index].currentState!.popUntil((route) => route.isFirst);
+                        } else {
+                          // Notify the provider about tab change
+                          tabRefreshProvider.onTabChanged(index);
+                          
+                          setState(() {
+                            _selectedIndex = index;
+                          });
+                        }
+                      },
+                      items: const [
+                        BottomNavigationBarItem(
+                          icon: Icon(Icons.home),
+                          label: 'Home',
+                        ),
+                        BottomNavigationBarItem(
+                          icon: Icon(Icons.shopping_cart),
+                          label: 'Orders',
+                        ),
+                        BottomNavigationBarItem(
+                          icon: Icon(Icons.person_search),
+                          label: 'Customers',
+                        ),
+                        // BottomNavigationBarItem( // Queries tab commented out
+                        //   icon: Icon(Icons.question_answer),
+                        //   label: 'Queries',
+                        // ),
+                        BottomNavigationBarItem(
+                          icon: Icon(Icons.person),
+                          label: 'Profile',
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),

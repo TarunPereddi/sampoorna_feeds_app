@@ -16,7 +16,7 @@ class PaginationResult<T> {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://api.sampoornafeeds.in:4052/BCtest/ODataV4';
+  static const String baseUrl = 'http://api.sampoornafeeds.in:7048/BC230/ODataV4';
   static const String username = 'JobQueue';
   static const String password = 'India@12good';
   static const String company = 'Sampoorna Feeds Pvt. Ltd';
@@ -328,7 +328,6 @@ class ApiService {
       return null;
     }
   }
-
   // Get locations filtered by location codes
   Future<List<dynamic>> getLocations({List<String>? locationCodes}) async {
     Map<String, String>? queryParams;
@@ -341,6 +340,22 @@ class ApiService {
 
     final response = await get('LocationList', queryParams: queryParams);
     return response['value'];
+  }
+
+  // Get a single location by code - optimized for faster lookups
+  Future<Map<String, dynamic>?> getSingleLocation(String locationCode) async {
+    if (locationCode.isEmpty) return null;
+    
+    try {
+      final queryParams = {'\$filter': "Code eq '$locationCode'"};
+      final response = await get('LocationList', queryParams: queryParams);
+      
+      final locations = response['value'] as List;
+      return locations.isNotEmpty ? locations.first : null;
+    } catch (e) {
+      debugPrint('Error fetching single location: $e');
+      return null;
+    }
   }
 
   // Get items based on location with optional search
@@ -482,13 +497,13 @@ class ApiService {
     debugPrint('Error creating sales order: $e');
     throw Exception('Failed to create sales order: $e');
   }
-}
-  /// Adds a line item to an existing sales order
+}  /// Adds a line item to an existing sales order
   Future<Map<String, dynamic>> addSalesOrderLine({
     required String documentNo,
     required String itemNo,
     required String locationCode,
     required int quantity,
+    required String unitOfMeasureCode,
   }) async {
     // Create request body
     Map<String, dynamic> body = {
@@ -496,7 +511,8 @@ class ApiService {
       "Type": "Item",
       "No": itemNo,
       "Location_Code": locationCode,
-      "Quantity": quantity
+      "Quantity": quantity,
+      "Unit_of_Measure_Code": unitOfMeasureCode
     };
     
     debugPrint('Adding sales order line: $body');

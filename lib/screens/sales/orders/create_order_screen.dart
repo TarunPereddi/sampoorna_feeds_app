@@ -292,13 +292,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         
         // Convert quantity to integer as required by the API
         final int quantity = item['quantity'].round();
-        
-        try {
+          try {
           await _apiService.addSalesOrderLine(
             documentNo: orderNo,
             itemNo: item['itemNo'],
             locationCode: locationCode,
             quantity: quantity,
+            unitOfMeasureCode: item['unitOfMeasure'],
           );
           
           _updateSubmissionStatus('Added item ${i+1}: ${item['itemDescription']}');

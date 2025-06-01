@@ -22,8 +22,7 @@ class ItemSelectionScreen extends StatefulWidget {
 
 class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
   final ApiService _apiService = ApiService();
-  final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();  final ScrollController _scrollController = ScrollController();
   
   List<Item> _items = [];
   bool _isLoading = false;
@@ -33,13 +32,11 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
   int _currentPage = 1;
   int _totalItems = 0;
   int _itemsPerPage = 10;
-  bool _hasMoreItems = true;
-  bool _isLoadingMore = false;
+  int _totalPages = 0;
   
   // For API call debouncing
   Timer? _searchDebounce;
-  
-  @override
+    @override
   void initState() {
     super.initState();
     
@@ -48,8 +45,8 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
       _searchController.text = widget.initialSearchText!;
     }
     
-    // Add scroll listener for pagination (if implemented)
-    _scrollController.addListener(_scrollListener);
+    // Add listener for real-time search
+    _searchController.addListener(_onSearchChanged);
     
     // Load initial items
     _loadItems();
@@ -57,25 +54,26 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
   
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
   }
-    void _scrollListener() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_isLoading && !_isLoadingMore && _hasMoreItems) {
-        _loadMoreItems();
-      }
-    }
-  }
-    Future<void> _loadItems({String? searchQuery}) async {
+    void _onSearchChanged() {
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+    
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _currentPage = 1; // Reset to first page on search
+      });
+      _loadItems(searchQuery: _searchController.text.isEmpty ? null : _searchController.text);
+    });
+  }Future<void> _loadItems({String? searchQuery}) async {
     if (_isLoading) return;
     
     setState(() {
       _isLoading = true;
-      _currentPage = 1; // Reset to first page for new searches
-      _items = []; // Clear current list for new searches
       if (searchQuery != null) _isSearching = true;
     });
     
@@ -88,9 +86,10 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
       );
       
       setState(() {
+        // Include all items (blocked and non-blocked) but display them differently
         _items = result.items.map((json) => Item.fromJson(json)).toList();
         _totalItems = result.totalCount;
-        _hasMoreItems = _items.length < _totalItems;
+        _totalPages = (_totalItems / _itemsPerPage).ceil();
         _isLoading = false;
         _isSearching = false;
       });
@@ -105,49 +104,31 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
     }
   }
   
-  Future<void> _loadMoreItems() async {
-    if (_isLoading || _isLoadingMore || !_hasMoreItems) return;
+  void _goToPage(int page) {
+    if (page < 1 || page > _totalPages || page == _currentPage || _isLoading) return;
     
     setState(() {
-      _isLoadingMore = true;
-      _currentPage++;
+      _currentPage = page;
     });
     
-    try {
-      final result = await _apiService.getItemsWithPagination(
-        locationCode: widget.locationCode,
-        searchQuery: _searchController.text.isEmpty ? null : _searchController.text,
-        page: _currentPage,
-        pageSize: _itemsPerPage,
-      );
-      
-      setState(() {
-        _items.addAll(result.items.map((json) => Item.fromJson(json)).toList());
-        _hasMoreItems = _items.length < _totalItems;
-        _isLoadingMore = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingMore = false;
-        _currentPage--; // Revert page increment on error
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading more items: $e')),
-      );
-    }
-  }
-    void _performSearch() {
-    if (_isSearching) return;
-    
-    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
-    
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      _loadItems(searchQuery: _searchController.text.isEmpty ? null : _searchController.text);
-    });
+    _loadItems(searchQuery: _searchController.text.isEmpty ? null : _searchController.text);
   }
   
-  @override
-  Widget build(BuildContext context) {    return Scaffold(      appBar: AppBar(
+  void _previousPage() {
+    if (_currentPage > 1) {
+      _goToPage(_currentPage - 1);
+    }
+  }
+  
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      _goToPage(_currentPage + 1);
+    }
+  }
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
         title: const Text('Select Product', style: TextStyle(color: AppColors.white)),
         backgroundColor: AppColors.primaryDark,
       ),
@@ -156,64 +137,248 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
           // Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search items...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                    ),
-                    onSubmitted: (_) => _performSearch(),
-                  ),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search items...',
+                prefixIcon: _isSearching 
+                    ? const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 8),                ElevatedButton(
-                  onPressed: _isSearching ? null : _performSearch,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryDark,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: _isSearching
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.search, color: Colors.white),
-                ),
-              ],
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              ),
             ),
           ),
             // Loading indicator for search
           if (_isSearching)
-            const LinearProgressIndicator(),
-            
-          // Results Count
+            const LinearProgressIndicator(),// Items List
+          Expanded(
+            child: Stack(
+              children: [
+                _items.isEmpty && !_isLoading
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _searchController.text.isNotEmpty 
+                                  ? 'No items found for "${_searchController.text}"'
+                                  : 'No items found',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            if (_searchController.text.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Try adjusting your search terms',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount: _items.length,
+                        itemBuilder: (context, index) {
+                          final item = _items[index];
+                          final isSelected = widget.initialSelection != null && 
+                                          widget.initialSelection!.no == item.no;
+                          final isBlocked = item.blocked;
+                          
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(
+                                color: isSelected 
+                                    ? AppColors.primary 
+                                    : isBlocked 
+                                        ? Colors.red
+                                        : AppColors.grey300,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${item.no} - ${item.description}',
+                                      style: TextStyle(
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                        color: isBlocked ? Colors.red : AppColors.grey900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isBlocked)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'BLOCKED',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              subtitle: isBlocked 
+                                  ? const Text(
+                                      'This item is currently blocked and cannot be selected',
+                                      style: TextStyle(color: Colors.red, fontSize: 12),
+                                    )
+                                  : null,
+                              onTap: isBlocked 
+                                  ? () {
+                                      // Show message for blocked items
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('This item is blocked and cannot be selected'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  : () {
+                                      Navigator.pop(context, item);
+                                    },
+                            ),
+                          );
+                        },
+                      ),
+                // Loading overlay for page changes
+                if (_isLoading && _items.isNotEmpty)
+                  Container(
+                    color: Colors.black.withOpacity(0.3),
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                // Full loading for initial load
+                if (_isLoading && _items.isEmpty)
+                  const Center(child: CircularProgressIndicator()),
+              ],
+            ),
+          ),
+            // Pagination Controls
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
-              color: AppColors.primaryLight,
+              color: Colors.grey.shade50,
               border: Border(
-                bottom: BorderSide(color: AppColors.grey300, width: 1),
+                top: BorderSide(color: AppColors.grey300, width: 1),
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Left side - Items count
+                Text(
+                  '$_totalItems items',
+                  style: TextStyle(
+                    color: AppColors.grey700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                
+                // Right side - Navigation controls
                 Row(
                   children: [
-                    Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.primaryDark),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Results: $_totalItems',
-                      style: TextStyle(
-                        color: AppColors.primaryDark,
-                        fontWeight: FontWeight.bold,
+                    // Previous button
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.grey300),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: IconButton(
+                        onPressed: _currentPage > 1 && !_isLoading ? _previousPage : null,
+                        icon: Icon(
+                          Icons.chevron_left,
+                          color: _currentPage > 1 && !_isLoading 
+                              ? AppColors.grey700 
+                              : AppColors.grey400,
+                        ),
+                        iconSize: 20,
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Page indicator
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.grey300),
+                      ),
+                      child: Text(
+                        '$_currentPage/$_totalPages',
+                        style: TextStyle(
+                          color: AppColors.primaryDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Next button
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.grey300),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: IconButton(
+                        onPressed: _currentPage < _totalPages && !_isLoading ? _nextPage : null,
+                        icon: Icon(
+                          Icons.chevron_right,
+                          color: _currentPage < _totalPages && !_isLoading 
+                              ? AppColors.grey700 
+                              : AppColors.grey400,
+                        ),
+                        iconSize: 20,
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
                       ),
                     ),
                   ],
@@ -221,59 +386,7 @@ class _ItemSelectionScreenState extends State<ItemSelectionScreen> {
               ],
             ),
           ),
-          
-          // Items List
-          Expanded(
-            child: _isLoading && _items.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No items found',
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                      )
-                    : Stack(
-                        children: [
-                          ListView.builder(
-                            controller: _scrollController,
-                            itemCount: _items.length,
-                            itemBuilder: (context, index) {
-                              final item = _items[index];
-                              final isSelected = widget.initialSelection != null && 
-                                              widget.initialSelection!.no == item.no;
-                              
-                              return ListTile(
-                                title: Text(
-                                  '${item.no} - ${item.description}',
-                                  style: TextStyle(
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  ),
-                                ),
-                                tileColor: isSelected ? Colors.green.withOpacity(0.1) : null,
-                                onTap: () {
-                                  Navigator.pop(context, item);
-                                },
-                              );
-                            },
-                          ),
-                          if (_isLoadingMore)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                height: 50,
-                                alignment: Alignment.center,
-                                color: Colors.black.withOpacity(0.1),
-                                child: const CircularProgressIndicator(),
-                              ),
-                            ),
-                        ],
-                      ),
-          ),
         ],
       ),
-    );
-  }
+    );  }
 }

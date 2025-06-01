@@ -112,7 +112,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     }
   }
 }
-
   Future<void> _fetchItems(String locationCode) async {
     setState(() {
       _isLoadingItems = true;
@@ -121,7 +120,11 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     try {
       final itemsData = await _apiService.getItems(locationCode: locationCode);
       setState(() {
-        _items = itemsData.map((json) => Item.fromJson(json)).toList();
+        // Filter out blocked items
+        _items = itemsData
+            .map((json) => Item.fromJson(json))
+            .where((item) => !item.blocked) // Only include non-blocked items
+            .toList();
         _isLoadingItems = false;
       });
     } catch (e) {
@@ -135,7 +138,6 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       }
     }
   }
-
   Future<void> _searchItems(String query, String locationCode) async {
     setState(() {
       _isLoadingItems = true;
@@ -149,9 +151,13 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       final filteredItems = itemsData.where((item) {
         final description = item['Description'] as String? ?? '';
         final itemNo = item['No'] as String? ?? '';
+        final isBlocked = item['Blocked'] as bool? ?? false;
         
-        return description.toLowerCase().contains(query.toLowerCase()) || 
-               itemNo.toLowerCase().contains(query.toLowerCase());
+        // Filter by search query and exclude blocked items
+        final matchesQuery = description.toLowerCase().contains(query.toLowerCase()) || 
+                            itemNo.toLowerCase().contains(query.toLowerCase());
+        
+        return matchesQuery && !isBlocked;
       }).toList();
       
       setState(() {

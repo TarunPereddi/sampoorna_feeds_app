@@ -710,13 +710,12 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           _updateSubmissionStatus('Adding item ${i+1} of ${onlyNewItems.length}: ${item['itemDescription']}...');
 
           // Convert quantity to integer as required by the API
-          final int quantity = item['quantity'].round();
-
-          await _apiService.addSalesOrderLine(
+          final int quantity = item['quantity'].round();          await _apiService.addSalesOrderLine(
             documentNo: widget.orderNo,
             itemNo: item['itemNo'],
             locationCode: _orderData!['Location_Code'] as String,
             quantity: quantity,
+            unitOfMeasureCode: item['unitOfMeasure'],
           );
         }
       }      _updateSubmissionStatus('Order updated successfully!');

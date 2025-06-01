@@ -1,5 +1,7 @@
 // lib/services/auth_service.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/sales_person.dart';
 import 'api_service.dart';
 
@@ -16,12 +18,100 @@ class ForgotPasswordResult {
 class AuthService extends ChangeNotifier {
   SalesPerson? _currentUser;
   bool _isLoading = false;
-  String? _error;
+  String? _error;  static const String _userKey = 'current_user';
+  static const String _usernameKey = 'username';
+  static const String _passwordKey = 'password';
+  static const String _rememberMeKey = 'remember_me';
   
   SalesPerson? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
+
+  // Check for existing session on app startup
+  Future<void> checkExistingSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString(_userKey);
+      
+      if (userJson != null) {
+        final userMap = json.decode(userJson);
+        _currentUser = SalesPerson.fromJson(userMap);
+        notifyListeners();
+      }
+    } catch (e) {
+      // If there's an error loading the session, clear it
+      await clearSession();
+    }
+  }
+  // Save user session to local storage
+  Future<void> _saveSession(SalesPerson user, String username) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_userKey, json.encode(user.toJson()));
+      await prefs.setString(_usernameKey, username);
+    } catch (e) {
+      // Handle error saving session
+      print('Error saving session: $e');
+    }
+  }
+
+  // Save login credentials when "Remember Me" is checked
+  Future<void> saveLoginCredentials(String username, String password, bool rememberMe) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_rememberMeKey, rememberMe);
+      
+      if (rememberMe) {
+        await prefs.setString(_usernameKey, username);
+        await prefs.setString(_passwordKey, password);
+      } else {
+        await prefs.remove(_passwordKey);
+      }
+    } catch (e) {
+      print('Error saving credentials: $e');
+    }
+  }
+
+  // Get saved login credentials
+  Future<Map<String, dynamic>> getSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberMe = prefs.getBool(_rememberMeKey) ?? false;
+      final username = prefs.getString(_usernameKey) ?? '';
+      final password = rememberMe ? (prefs.getString(_passwordKey) ?? '') : '';
+      
+      return {
+        'username': username,
+        'password': password,
+        'rememberMe': rememberMe,
+      };
+    } catch (e) {
+      print('Error loading credentials: $e');
+      return {
+        'username': '',
+        'password': '',
+        'rememberMe': false,
+      };
+    }
+  }
+  // Clear user session from local storage
+  Future<void> clearSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_userKey);
+      // Don't clear username and password if remember me is enabled
+      final rememberMe = prefs.getBool(_rememberMeKey) ?? false;
+      if (!rememberMe) {
+        await prefs.remove(_usernameKey);
+        await prefs.remove(_passwordKey);
+        await prefs.remove(_rememberMeKey);
+      }
+    } catch (e) {
+      // Handle error clearing session
+      print('Error clearing session: $e');
+    }
+  }
   
   Future<dynamic> login(String username, String password) async {
     try {
@@ -45,8 +135,7 @@ class AuthService extends ChangeNotifier {
           _isLoading = false;
           notifyListeners();
           // Return a special result for first-time login
-          return 'first_login';
-        } else if (loginResponse['value'] == 'OK') {
+          return 'first_login';        } else if (loginResponse['value'] == 'OK') {
           // If login successful, get the sales person details
           final response = await apiService.get('SalesPerson', 
             queryParams: {'\$filter': "Code eq '$username'"});
@@ -68,6 +157,7 @@ class AuthService extends ChangeNotifier {
           }
           
           _currentUser = SalesPerson.fromJson(salesPersons[0]);
+          await _saveSession(_currentUser!, username);
           _isLoading = false;
           notifyListeners();
           return true;
@@ -266,8 +356,8 @@ class AuthService extends ChangeNotifier {
           notifyListeners();
           return false;
         }
-        
-        _currentUser = SalesPerson.fromJson(salesPersons[0]);
+          _currentUser = SalesPerson.fromJson(salesPersons[0]);
+        await _saveSession(_currentUser!, username);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -307,9 +397,9 @@ class AuthService extends ChangeNotifier {
       return false;
     }
   }
-
-  void logout() {
+  Future<void> logout() async {
     _currentUser = null;
+    await clearSession();
     notifyListeners();
   }
 }

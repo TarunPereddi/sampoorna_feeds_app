@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../mixins/tab_refresh_mixin.dart';
 import 'create_order_screen.dart';
 import 'order_list_view.dart';
 import 'order_table_view.dart';
@@ -20,7 +21,7 @@ class OrdersScreenFixed extends StatefulWidget {
 }
 
 class _OrdersScreenFixedState extends State<OrdersScreenFixed> 
-    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin, TabRefreshMixin {
   // Tab controller for status tabs
   late TabController _tabController;
   
@@ -54,9 +55,19 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
 
   // Search controller
   final TextEditingController _searchController = TextEditingController();
-
   @override
   bool get wantKeepAlive => true; // Keep state when switching tabs
+
+  // TabRefreshMixin implementation
+  @override
+  int get tabIndex => 1; // Orders tab index
+  @override
+  Future<void> performRefresh() async {
+    debugPrint('OrdersScreen: Performing refresh');
+    _currentPage = 1;
+    _allOrders.clear();
+    await _loadOrders();
+  }
 
   @override
   void initState() {

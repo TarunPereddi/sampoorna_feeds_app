@@ -20,8 +20,23 @@ class _LoginScreenState extends State<LoginScreen> {
   String _selectedPersona = 'sales'; // Default to sales persona
   bool _isLoading = false;
   bool _obscurePassword = true;
-
+  bool _rememberMe = false;
   @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final credentials = await authService.getSavedCredentials();
+    
+    setState(() {
+      _usernameController.text = credentials['username'] ?? '';
+      _passwordController.text = credentials['password'] ?? '';
+      _rememberMe = credentials['rememberMe'] ?? false;
+    });
+  }  @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
@@ -204,6 +219,39 @@ Align(
      ),
    ),
  ),
+),
+
+// Remember Me checkbox
+Row(
+  children: [
+    Checkbox(
+      value: _rememberMe,
+      onChanged: (value) {
+        setState(() {
+          _rememberMe = value ?? false;
+        });
+      },
+      activeColor: AppColors.primary,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    ),
+    Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _rememberMe = !_rememberMe;
+          });
+        },
+        child: Text(
+          'Remember me',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 13 : 14,
+            color: AppColors.grey700,
+          ),
+        ),
+      ),
+    ),
+  ],
 ),
 
             
@@ -471,11 +519,13 @@ Align(
     
     setState(() {
       _isLoading = true;
-    });
-
-    try {      if (_selectedPersona == 'sales') {
+    });    try {      if (_selectedPersona == 'sales') {
         // Use AuthService for sales persona
         final authService = Provider.of<AuthService>(context, listen: false);
+        
+        // Save credentials if remember me is checked
+        await authService.saveLoginCredentials(username, password, _rememberMe);
+        
         final result = await authService.login(username, password);
         
         if (result == 'first_login') {
