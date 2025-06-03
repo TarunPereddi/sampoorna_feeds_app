@@ -9,10 +9,12 @@ import 'state_selection_screen.dart';
 
 class AddShipToScreen extends StatefulWidget {
   final String customerNo;
+  final ShipTo? existingShipTo; // For update mode
   
   const AddShipToScreen({
     Key? key,
     required this.customerNo,
+    this.existingShipTo, // Optional for update mode
   }) : super(key: key);
   
   @override
@@ -32,26 +34,144 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
   List<ShipTo> _existingShipToAddresses = [];
   StateModel? _selectedState;
   bool _autoValidate = false;
-    @override
+  
+  // For tracking changes in update mode
+  bool get _isUpdateMode => widget.existingShipTo != null;
+  Map<String, String> _originalValues = {}; // Store original values for comparison
+  bool _hasChanges = false; // Track if any changes have been made
+  @override
   void initState() {
     super.initState();
     _loadExistingShipToAddresses();
     
-    // Add listeners for conditional validation
+    // Add listeners for conditional validation and change tracking
     _postcodeController.addListener(_onFieldChanged);
     _cityController.addListener(_onFieldChanged);
+    _codeController.addListener(_onFieldChanged);
+    _nameController.addListener(_onFieldChanged);
+    _addressController.addListener(_onFieldChanged);
+    _address2Controller.addListener(_onFieldChanged);
+    _phoneController.addListener(_onFieldChanged);
+    
+    // If in update mode, prefill the form with existing data
+    if (_isUpdateMode) {
+      _prefillFormData();
+    }
   }
-  
-  void _onFieldChanged() {
+    void _prefillFormData() {
+    final shipTo = widget.existingShipTo!;
+    
+    print('🔄 Prefilling form with ship-to data:');
+    print('  Code: ${shipTo.code}');
+    print('  Name: ${shipTo.name}');
+    print('  State: ${shipTo.state}');
+    print('  Address: ${shipTo.address}');
+    print('  City: ${shipTo.city}');
+    print('  PostCode: ${shipTo.postCode}');
+    print('  Phone: ${shipTo.phoneNo}');
+    
+    // Set form values
+    _codeController.text = shipTo.code;
+    _nameController.text = shipTo.name;
+    _addressController.text = shipTo.address ?? '';
+    _address2Controller.text = shipTo.address2 ?? '';
+    _cityController.text = shipTo.city ?? '';
+    _postcodeController.text = shipTo.postCode ?? '';
+    _phoneController.text = shipTo.phoneNo ?? '';
+    
+    // Store original values for comparison
+    _originalValues = {
+      'code': shipTo.code,
+      'name': shipTo.name,
+      'address': shipTo.address ?? '',
+      'address2': shipTo.address2 ?? '',
+      'city': shipTo.city ?? '',
+      'postCode': shipTo.postCode ?? '',
+      'phoneNo': shipTo.phoneNo ?? '',
+      'state': shipTo.state ?? '',
+    };
+    
+    // Load states and set selected state based on shipTo.state
+    if (shipTo.state?.isNotEmpty == true) {
+      print('🔄 Loading state for: ${shipTo.state}');
+      _loadAndSetState(shipTo.state!);
+    } else {
+      print('🔄 No state to load (empty or null)');
+    }
+  }
+    Future<void> _loadAndSetState(String stateCode) async {
+    try {
+      print('🏛️ Loading state for code: $stateCode');
+      final states = await _apiService.getStates();
+      print('🏛️ Available states: ${states.length}');
+      
+      // Find the state that matches the code
+      final matchingStateJson = states.cast<Map<String, dynamic>>().firstWhere(
+        (state) => state['Code'] == stateCode,
+        orElse: () => {},
+      );
+      
+      if (matchingStateJson.isNotEmpty && mounted) {
+        final stateModel = StateModel.fromJson(matchingStateJson);
+        print('🏛️ Found matching state: ${stateModel.description} (${stateModel.code})');
+        setState(() {
+          _selectedState = stateModel;
+        });
+        
+        // Also set the validation state for postcode validation
+        ValidationState.instance.setStateValidation(
+          fromPin: stateModel.fromPin,
+          toPin: stateModel.toPin,
+          stateName: stateModel.description,
+        );
+      } else {
+        print('🏛️ No matching state found for code: $stateCode');
+      }
+    } catch (e) {
+      debugPrint('Error loading state for prefill: $e');
+    }
+  }
+    void _onFieldChanged() {
+    // Check for changes and update _hasChanges flag
+    if (_isUpdateMode) {
+      final hasChanges = _codeController.text != _originalValues['code'] ||
+          _nameController.text != _originalValues['name'] ||
+          _addressController.text != _originalValues['address'] ||
+          _address2Controller.text != _originalValues['address2'] ||
+          _cityController.text != _originalValues['city'] ||
+          _postcodeController.text != _originalValues['postCode'] ||
+          _phoneController.text != _originalValues['phoneNo'] ||
+          (_selectedState?.code ?? '') != _originalValues['state'];
+      
+      print('🔄 Change detection: hasChanges=$hasChanges, current _hasChanges=$_hasChanges');
+      if (hasChanges) {
+        print('   - Code: "${_codeController.text}" vs "${_originalValues['code']}" = ${_codeController.text != _originalValues['code']}');
+        print('   - Name: "${_nameController.text}" vs "${_originalValues['name']}" = ${_nameController.text != _originalValues['name']}');
+        print('   - State: "${_selectedState?.code ?? ''}" vs "${_originalValues['state']}" = ${(_selectedState?.code ?? '') != _originalValues['state']}');
+      }
+      
+      if (hasChanges != _hasChanges) {
+        print('🔄 Updating _hasChanges from $_hasChanges to $hasChanges');
+        setState(() {
+          _hasChanges = hasChanges;
+        });
+      }
+    }
+    
     // Trigger validation when fields change to update conditional validation
     if (_autoValidate) {
       _formKey.currentState?.validate();
     }
-  }  @override
+  }@override
   void dispose() {
     // Remove listeners
     _postcodeController.removeListener(_onFieldChanged);
     _cityController.removeListener(_onFieldChanged);
+    _codeController.removeListener(_onFieldChanged);
+    _nameController.removeListener(_onFieldChanged);
+    _addressController.removeListener(_onFieldChanged);
+    _address2Controller.removeListener(_onFieldChanged);
+    _phoneController.removeListener(_onFieldChanged);
     
     _codeController.dispose();
     _nameController.dispose();
@@ -75,7 +195,7 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
       // Handle error silently or log it
       debugPrint('Error loading existing ship-to addresses: $e');
     }}  Future<void> _saveShipToAddress() async {
-    print('💾 Save button pressed');
+    print('💾 Save button pressed - Mode: ${_isUpdateMode ? "Update" : "Create"}');
     setState(() {
       _autoValidate = true;
     });
@@ -87,26 +207,56 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
     }
     print('✅ Form validation passed');
     
+    // In update mode, check if there are changes
+    if (_isUpdateMode && !_hasChanges) {
+      print('ℹ️ No changes detected in update mode, returning');
+      Navigator.pop(context);
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
     });
-    
-    // Prepare ship-to data for API
-    final shipToData = {
-      'Customer_No': widget.customerNo,
-      'Code': _codeController.text.trim(),
-      'Name': _nameController.text.trim(),
-      'Address': _addressController.text.trim(),
-      'Address_2': _address2Controller.text.trim(),
-      'State': _selectedState?.code ?? '',
-      'City': _cityController.text.trim(),
-      'Post_Code': _postcodeController.text.trim(),
-      'Phone_No': _phoneController.text.trim(),
-    };    try {
-      // Create the ship-to address
-      await _apiService.createShipToAddress(shipToData);
+      // Prepare ship-to data for API
+    Map<String, dynamic> shipToData;
+      if (_isUpdateMode) {
+      // Update API expects different field names with specific case
+      shipToData = {
+        'custCode': widget.customerNo,
+        'code': _codeController.text.trim(),
+        'name': _nameController.text.trim(),
+        'address': _addressController.text.trim(),
+        'address2': _address2Controller.text.trim(),
+        'state': _selectedState?.code ?? '',
+        'city': _cityController.text.trim(),
+        'postCode': _postcodeController.text.trim(),
+        'phoneNo': _phoneController.text.trim(),
+      };
+    } else {
+      // Create API uses standard field names
+      shipToData = {
+        'Customer_No': widget.customerNo,
+        'Code': _codeController.text.trim(),
+        'Name': _nameController.text.trim(),
+        'Address': _addressController.text.trim(),
+        'Address_2': _address2Controller.text.trim(),
+        'State': _selectedState?.code ?? '',
+        'City': _cityController.text.trim(),
+        'Post_Code': _postcodeController.text.trim(),
+        'Phone_No': _phoneController.text.trim(),
+      };
+    }
+
+    try {
+      if (_isUpdateMode) {
+        print('🔄 Updating existing ship-to address');
+        await _apiService.updateShipToAddress(shipToData);
+      } else {
+        print('➕ Creating new ship-to address');
+        await _apiService.createShipToAddress(shipToData);
+      }
       
-      // Also create pincode entry if both postcode and city are provided
+      // Also create pincode entry if both postcode and city are provided (for both create and update)
       final postcode = _postcodeController.text.trim();
       final city = _cityController.text.trim();
       if (postcode.isNotEmpty && city.isNotEmpty) {
@@ -115,9 +265,8 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
           code: postcode,
           city: city,
         );
-      }
-        // Create ShipTo object to pass back to previous screen
-      final newShipTo = ShipTo(
+      }      // Create ShipTo object to pass back to previous screen
+      final shipTo = ShipTo(
         customerNo: widget.customerNo,
         code: _codeController.text.trim(),
         name: _nameController.text.trim(),
@@ -126,21 +275,48 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
         state: _selectedState?.code ?? '',
         postCode: _postcodeController.text.trim(),
         phoneNo: _phoneController.text.trim(),
+        // Preserve other fields from existing ship-to if in update mode
+        address2: _address2Controller.text.trim(),
+        county: widget.existingShipTo?.county,
+        contact: widget.existingShipTo?.contact,
+        faxNo: widget.existingShipTo?.faxNo,
+        email: widget.existingShipTo?.email,
+        gln: widget.existingShipTo?.gln,
+        gstRegistrationNo: widget.existingShipTo?.gstRegistrationNo,
+        shipToGstCustomerType: widget.existingShipTo?.shipToGstCustomerType,
+        countryRegionCode: widget.existingShipTo?.countryRegionCode,
+        homePage: widget.existingShipTo?.homePage,
+        locationCode: widget.existingShipTo?.locationCode,
+        arnNo: widget.existingShipTo?.arnNo,
+        consignee: widget.existingShipTo?.consignee ?? false,
+        lastDateModified: widget.existingShipTo?.lastDateModified,
       );
-        Navigator.pop(context, newShipTo);
+
+      print('✅ Ship-to address ${_isUpdateMode ? "updated" : "created"} successfully');
+      Navigator.pop(context, shipTo);
     } catch (e) {
+      print('❌ Error ${_isUpdateMode ? "updating" : "creating"} ship-to address: $e');
       setState(() {
         _isLoading = false;
       });
+      
+      // Show error message to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to ${_isUpdateMode ? "update" : "create"} ship-to address. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey100,
-      appBar: AppBar(
-        title: const Text(
-          'Add Ship-To Address',
+      backgroundColor: AppColors.grey100,      appBar: AppBar(
+        title: Text(
+          _isUpdateMode ? 'Update Ship-To Address' : 'Add Ship-To Address',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
         ),
         backgroundColor: AppColors.primaryDark,
@@ -155,9 +331,8 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                     height: 20, 
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                   )
-                : const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveShipToAddress,
-            tooltip: 'Save Address',
+                : const Icon(Icons.save),            onPressed: _isLoading ? null : (_isUpdateMode && !_hasChanges ? null : _saveShipToAddress),
+            tooltip: _isUpdateMode ? 'Update Address' : 'Save Address',
           ),
           const SizedBox(width: 8),
         ],
@@ -183,10 +358,11 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                   ),                  child: Row(
                     children: [
                       Icon(Icons.info_outline, color: AppColors.info, size: 18),
-                      const SizedBox(width: 12),
-                      Expanded(
+                      const SizedBox(width: 12),                      Expanded(
                         child: Text(
-                          'Add a new ship-to address. This address will be available for selection when creating new orders.',
+                          _isUpdateMode 
+                            ? 'Update the ship-to address details. Changes will be saved when you tap the save button.'
+                            : 'Add a new ship-to address. This address will be available for selection when creating new orders.',
                           style: TextStyle(color: AppColors.info, fontSize: 13),
                         ),
                       ),
@@ -204,14 +380,14 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                       flex: 3,
                       child: _buildCompactField(                        controller: _codeController,
                         label: 'Code*',
-                        hint: 'Enter unique identifier',                        icon: Icons.code,
-                        validator: (value) {
+                        hint: 'Enter unique identifier',                        icon: Icons.code,                        validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Required';
                           }
-                          // Check if code already exists
+                          // Check if code already exists (exclude current record in update mode)
                           final existingCode = _existingShipToAddresses.any(
-                            (shipTo) => shipTo.code.toLowerCase() == value.toLowerCase()
+                            (shipTo) => shipTo.code.toLowerCase() == value.toLowerCase() &&
+                                       (!_isUpdateMode || shipTo.code != widget.existingShipTo?.code)
                           );
                           if (existingCode) {
                             return 'This code already exists. Please use a unique code.';
@@ -312,35 +488,63 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                   ],
                 ),
                 
-                const SizedBox(height: 20),
-                
-                // Save button
+                const SizedBox(height: 20),                // Save button
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _saveShipToAddress,
+                  onPressed: _isLoading ? null : (_isUpdateMode && !_hasChanges ? null : _saveShipToAddress),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryDark,
+                    backgroundColor: (_isUpdateMode && !_hasChanges) ? Colors.grey[400] : AppColors.primaryDark,
                     foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    elevation: 1,
+                    elevation: (_isUpdateMode && !_hasChanges) ? 0 : 1,
                   ),
                   child: _isLoading
                       ? const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : Row(
+                        )                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
+                          children: [
                             Icon(Icons.save),
                             SizedBox(width: 8),
-                            Text('Save Address', style: TextStyle(fontSize: 16)),
-                          ],
+                            Text(
+                              _isUpdateMode ? 'Update Address' : 'Save Address', 
+                              style: TextStyle(fontSize: 16)
+                            ),                          ],
                         ),
                 ),
+                
+                // No changes indicator for update mode
+                if (_isUpdateMode && !_hasChanges) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.grey[600], size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'No changes detected. Make changes to the form to enable the update button.',
+                            style: TextStyle(
+                              color: Colors.grey[600], 
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -383,6 +587,9 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                     stateName: selectedState.description,
                   );
                   
+                  // Call _onFieldChanged to update _hasChanges flag
+                  _onFieldChanged();
+                  
                   state.didChange(selectedState);
                   print('🏛️ State selection completed');
                 }
@@ -409,10 +616,9 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
-                          ),
-                          const SizedBox(height: 2),
+                          ),                          const SizedBox(height: 2),
                           Text(
-                            _selectedState?.description ?? 'Select state',
+                            _selectedState?.code ?? 'Select state',
                             style: TextStyle(
                               color: _selectedState != null ? AppColors.grey800 : AppColors.grey600,
                               fontSize: 14,

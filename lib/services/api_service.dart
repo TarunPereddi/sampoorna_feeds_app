@@ -16,7 +16,7 @@ class PaginationResult<T> {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://api.sampoornafeeds.in:7048/BC230/ODataV4';
+  static const String baseUrl = 'http://api.sampoornafeeds.in:4052/BCtest/ODataV4';
   static const String username = 'JobQueue';
   static const String password = 'India@12good';
   static const String company = 'Sampoorna Feeds Pvt. Ltd';
@@ -219,6 +219,11 @@ class ApiService {
     return await post('ShiptoAddress', body: shipToData);
   }
 
+  // Update an existing ship-to address
+  Future<dynamic> updateShipToAddress(Map<String, dynamic> shipToData) async {
+    return await post('API_ModifyShiptoCOde', body: shipToData);
+  }
+
   // Create pincode entry (fire and forget - no response handling needed)
   Future<void> createPinCode({
     required String code,
@@ -357,13 +362,18 @@ class ApiService {
       return null;
     }
   }
-
   // Get items based on location with optional search
   Future<List<dynamic>> getItems({
     required String locationCode,
     String? searchQuery,
+    bool includeBlocked = false, // New parameter to control blocked items
   }) async {
     List<String> filters = ["Item_Location eq '$locationCode'"];
+    
+    // Add blocked filter - by default exclude blocked items
+    if (!includeBlocked) {
+      filters.add("Blocked eq false");
+    }
     
     // Add search filter if provided
     if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -375,7 +385,7 @@ class ApiService {
     final queryParams = {'\$filter': filters.join(' and ')};
     final response = await get('ItemList', queryParams: queryParams);
     return response['value'];
-  }  // Get sales orders with filtering and pagination
+  }// Get sales orders with filtering and pagination
   Future<dynamic> getSalesOrders({
     String? searchQuery,
     String? searchFilter, // New parameter for direct filter string
@@ -873,13 +883,13 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       return [];
     }
   }
-
   // Get items with pagination support
   Future<PaginationResult<Map<String, dynamic>>> getItemsWithPagination({
     required String locationCode,
     String? searchQuery,
     required int page,
     required int pageSize,
+    bool includeBlocked = false, // New parameter to control blocked items
   }) async {
     Map<String, String> queryParams = {
       '\$count': 'true',
@@ -892,6 +902,11 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     
     // Add location filter
     filters.add("Item_Location eq '$locationCode'");
+    
+    // Add blocked filter - by default exclude blocked items
+    if (!includeBlocked) {
+      filters.add("Blocked eq false");
+    }
     
     // Add search filter if provided
     if (searchQuery != null && searchQuery.isNotEmpty) {

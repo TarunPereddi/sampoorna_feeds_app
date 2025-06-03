@@ -184,46 +184,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
+          ? const Center(child: CircularProgressIndicator())              : _errorMessage != null
               ? _buildErrorWidget()
-              : Stack(
-                  children: [
-                    _buildCustomerDetailsContent(),
-                    
-                    // Floating action buttons for all tabs
-                    Positioned(
-                      bottom: 16,
-                      right: 16,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FloatingActionButton.extended(
-                            heroTag: 'generateInvoice',
-                            onPressed: () {
-                              _showDateRangeDialog(context, 'invoice');
-                            },
-                            backgroundColor: const Color(0xFF2C5F2D),
-                            foregroundColor: Colors.white,
-                            icon: const Icon(Icons.receipt_long),
-                            label: const Text('Invoice'),
-                          ),
-                          const SizedBox(height: 12),
-                          FloatingActionButton.extended(
-                            heroTag: 'generateReport',
-                            onPressed: () {
-                              _showDateRangeDialog(context, 'statement');
-                            },
-                            backgroundColor: const Color(0xFF2C5F2D),
-                            foregroundColor: Colors.white,
-                            icon: const Icon(Icons.summarize),
-                            label: const Text('Statement'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              : _buildCustomerDetailsContent(),
     );
   }
 
@@ -347,8 +310,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                Row(
+                const SizedBox(height: 4),                Row(
                   children: [
                     Text(
                       'ID: ${_customerDetails['No'] ?? 'N/A'}',
@@ -378,6 +340,39 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                         ),
                       ),
                   ],
+                ),                const SizedBox(height: 8),
+                // Generate Report Button (responsive sizing)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isSmallScreen = MediaQuery.of(context).size.width < 400;
+                      return ElevatedButton.icon(
+                        onPressed: () => _showReportGenerationDialog(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
+                          elevation: 0,
+                          padding: EdgeInsets.symmetric(
+                            vertical: isSmallScreen ? 6 : 8, 
+                            horizontal: isSmallScreen ? 12 : 16,
+                          ),
+                          minimumSize: Size(isSmallScreen ? 120 : 140, 0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        icon: Icon(Icons.description, size: isSmallScreen ? 16 : 18),
+                        label: Text(
+                          'Generate Report',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 12 : 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -904,155 +899,384 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           },
         ),
       ],
-    );
-  }
+    );  }
 
-  void _showDateRangeDialog(BuildContext context, String reportType) {
+  void _showReportGenerationDialog(BuildContext context) {
     DateTime? fromDate;
     DateTime? toDate;
+    String selectedReportType = 'invoice'; // Default to invoice
     
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {        return StatefulBuilder(
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: Row(
-                children: [
-                  Icon(
-                    reportType == 'invoice' ? Icons.receipt_long : Icons.summarize,
-                    color: const Color(0xFF2C5F2D),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      reportType == 'invoice' ? 'Generate Invoice' : 'Generate Statement',
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ],
+            // Get screen size for responsive design
+            final screenSize = MediaQuery.of(context).size;
+            final isTablet = screenSize.width > 600;
+            final isSmallScreen = screenSize.width < 400;
+            final availableHeight = screenSize.height * 0.8; // Use 80% of screen height max
+            
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 16 : (isTablet ? 60 : 24),
+                vertical: 20,
               ),
-              contentPadding: const EdgeInsets.fromLTRB(24.0, 16.0, 24.0, 0.0),
-              content: ConstrainedBox(
+              child: Container(
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.85,
+                  maxWidth: isTablet ? 500 : double.infinity,
+                  maxHeight: availableHeight,
                 ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // From Date Picker
-                      InkWell(
-                        onTap: () async {
-                          final DateTime? picked = await showDatePicker(
-                            context: context,
-                            initialDate: fromDate ?? DateTime.now().subtract(const Duration(days: 30)),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              fromDate = picked;
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  fromDate != null 
-                                    ? DateFormat('dd/MM/yyyy').format(fromDate!)
-                                    : 'From Date',
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                              ),
-                              const Icon(Icons.calendar_today, size: 20),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // To Date Picker
-                      InkWell(
-                        onTap: () async {
-                          final DateTime? picked = await showDatePicker(
-                            context: context,
-                            initialDate: toDate ?? DateTime.now(),
-                            firstDate: fromDate ?? DateTime(2020),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              toDate = picked;
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  toDate != null 
-                                    ? DateFormat('dd/MM/yyyy').format(toDate!)
-                                    : 'To Date',
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                              ),
-                              const Icon(Icons.calendar_today, size: 20),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),              actions: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: (fromDate != null && toDate != null)
-                          ? () {
-                              Navigator.pop(dialogContext);
-                              _generateReport(reportType, fromDate!, toDate!);
-                            }
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2C5F2D),
-                      ),
-                      child: const Text('Generate'),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-              ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with title
+                    Container(
+                      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C5F2D).withOpacity(0.05),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.description,
+                            color: const Color(0xFF2C5F2D),
+                            size: isSmallScreen ? 20 : 22,
+                          ),
+                          SizedBox(width: isSmallScreen ? 8 : 12),
+                          Expanded(
+                            child: Text(
+                              'Generate Report',
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 16 : 18,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF2C5F2D),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Scrollable content
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Report Type Selection Section
+                            Container(
+                              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Select Report Type',
+                                    style: TextStyle(
+                                      fontSize: isSmallScreen ? 14 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: isSmallScreen ? 12 : 16),
+                                  
+                                  // Radio buttons for report type
+                                  Column(
+                                    children: [
+                                      RadioListTile<String>(
+                                        title: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.receipt_long, 
+                                              size: isSmallScreen ? 18 : 20, 
+                                              color: Colors.grey.shade700,
+                                            ),
+                                            SizedBox(width: isSmallScreen ? 8 : 12),
+                                            Expanded(
+                                              child: Text(
+                                                'Invoice Report',
+                                                style: TextStyle(
+                                                  fontSize: isSmallScreen ? 13 : 15,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        value: 'invoice',
+                                        groupValue: selectedReportType,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            selectedReportType = value!;
+                                          });
+                                        },
+                                        activeColor: const Color(0xFF2C5F2D),
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: isSmallScreen,
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 4 : 8),
+                                      RadioListTile<String>(
+                                        title: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.summarize, 
+                                              size: isSmallScreen ? 18 : 20, 
+                                              color: Colors.grey.shade700,
+                                            ),
+                                            SizedBox(width: isSmallScreen ? 8 : 12),
+                                            Expanded(
+                                              child: Text(
+                                                'Statement Report',
+                                                style: TextStyle(
+                                                  fontSize: isSmallScreen ? 13 : 15,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        value: 'statement',
+                                        groupValue: selectedReportType,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            selectedReportType = value!;
+                                          });
+                                        },
+                                        activeColor: const Color(0xFF2C5F2D),
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: isSmallScreen,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            SizedBox(height: isSmallScreen ? 16 : 24),
+                            
+                            // Date Range Selection Section
+                            Container(
+                              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Select Date Range',
+                                    style: TextStyle(
+                                      fontSize: isSmallScreen ? 14 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: isSmallScreen ? 12 : 16),
+                                  
+                                  // From Date Picker
+                                  _buildDatePickerField(
+                                    context: context,
+                                    label: 'From Date',
+                                    date: fromDate,
+                                    onDateSelected: (picked) {
+                                      setState(() {
+                                        fromDate = picked;
+                                      });
+                                    },
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime.now(),
+                                    initialDate: fromDate ?? DateTime.now().subtract(const Duration(days: 30)),
+                                    isSmallScreen: isSmallScreen,
+                                  ),
+                                  
+                                  SizedBox(height: isSmallScreen ? 12 : 16),
+                                  
+                                  // To Date Picker
+                                  _buildDatePickerField(
+                                    context: context,
+                                    label: 'To Date',
+                                    date: toDate,
+                                    onDateSelected: (picked) {
+                                      setState(() {
+                                        toDate = picked;
+                                      });
+                                    },
+                                    firstDate: fromDate ?? DateTime(2020),
+                                    lastDate: DateTime.now(),
+                                    initialDate: toDate ?? DateTime.now(),
+                                    isSmallScreen: isSmallScreen,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Action buttons
+                    Container(
+                      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(12),
+                          bottomRight: Radius.circular(12),
+                        ),
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade200),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            flex: isSmallScreen ? 1 : 0,
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 12 : 20, 
+                                  vertical: isSmallScreen ? 10 : 12,
+                                ),
+                              ),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(fontSize: isSmallScreen ? 14 : 15),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: isSmallScreen ? 8 : 12),
+                          Expanded(
+                            flex: isSmallScreen ? 1 : 0,
+                            child: ElevatedButton(
+                              onPressed: (fromDate != null && toDate != null)
+                                  ? () {
+                                      Navigator.pop(dialogContext);
+                                      _generateReport(selectedReportType, fromDate!, toDate!);
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2C5F2D),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 12 : 24, 
+                                  vertical: isSmallScreen ? 10 : 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Generate',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 14 : 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         );
       },
     );
   }
-
+  Widget _buildDatePickerField({
+    required BuildContext context,
+    required String label,
+    required DateTime? date,
+    required Function(DateTime) onDateSelected,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    required DateTime initialDate,
+    bool isSmallScreen = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: isSmallScreen ? 12 : 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade700,
+          ),
+        ),
+        SizedBox(height: isSmallScreen ? 6 : 8),
+        InkWell(
+          onTap: () async {
+            final DateTime? picked = await showDatePicker(
+              context: context,
+              initialDate: initialDate,
+              firstDate: firstDate,
+              lastDate: lastDate,
+            );
+            if (picked != null) {
+              onDateSelected(picked);
+            }
+          },
+          child: Container(
+            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+            decoration: BoxDecoration(              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    date != null 
+                      ? DateFormat('dd/MM/yyyy').format(date)
+                      : 'Select $label',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 13 : 15,
+                      color: date != null ? Colors.black87 : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.calendar_today, 
+                  size: isSmallScreen ? 18 : 20, 
+                  color: Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
   void _showLoadingDialog(BuildContext context, String reportType) {
     showDialog(
       context: context,

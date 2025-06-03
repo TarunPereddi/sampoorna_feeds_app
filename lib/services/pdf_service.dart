@@ -175,180 +175,306 @@ class PdfService {
       return false;
     }
   }
-  static void _showSuccessDialogWithOpen(BuildContext context, String fileName, String filePath, String fullPath) {
-    showDialog(
+  static void _showSuccessDialogWithOpen(BuildContext context, String fileName, String filePath, String fullPath) {    showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green.shade700, size: 28),
-              const SizedBox(width: 8),
-              const Text('PDF Saved Successfully'),
-            ],
+        final screenSize = MediaQuery.of(context).size;
+        final isSmallScreen = screenSize.width < 400;
+        final dialogWidth = screenSize.width * (isSmallScreen ? 0.9 : 0.8);
+        
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Your document has been saved:',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: Container(
+            width: dialogWidth > 400 ? 400 : dialogWidth,
+            padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title
+                Row(
                   children: [
-                    const Text(
-                      'File Name:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Icon(
+                      Icons.check_circle, 
+                      color: Colors.green.shade700, 
+                      size: isSmallScreen ? 24 : 28,
                     ),
-                    Text(
-                      fileName,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'PDF Saved Successfully',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 16 : 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Location:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      filePath,
-                      style: const TextStyle(fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),            ElevatedButton.icon(
-              onPressed: () async {
-                Navigator.pop(context);
-                await openFileWithFeedback(
-                  filePath: fullPath,
-                  context: context,
-                );
-              },
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open PDF'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2C5F2D),
-                foregroundColor: Colors.white,
-              ),
+                
+                const SizedBox(height: 16),
+                
+                // Content
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your document has been saved:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: isSmallScreen ? 13 : 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'File Name:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            fileName,
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 12 : 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Location:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            filePath,
+                            style: TextStyle(fontSize: isSmallScreen ? 11 : 12),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(fontSize: isSmallScreen ? 13 : 14),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await openFileWithFeedback(
+                          filePath: fullPath,
+                          context: context,
+                        );
+                      },
+                      icon: Icon(
+                        Icons.open_in_new, 
+                        size: isSmallScreen ? 16 : 18,
+                      ),
+                      label: Text(
+                        'Open PDF',
+                        style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C5F2D),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 12 : 16,
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
-
   static void _showSuccessDialog(BuildContext context, String fileName, String filePath) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green.shade700, size: 28),
-              const SizedBox(width: 8),
-              const Text('PDF Generated Successfully'),
-            ],
+        final screenSize = MediaQuery.of(context).size;
+        final isSmallScreen = screenSize.width < 400;
+        final dialogWidth = screenSize.width * (isSmallScreen ? 0.9 : 0.8);
+        
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Your document has been saved:',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: Container(
+            width: dialogWidth > 400 ? 400 : dialogWidth,
+            padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title
+                Row(
                   children: [
-                    const Text(
-                      'File Name:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Icon(
+                      Icons.check_circle, 
+                      color: Colors.green.shade700, 
+                      size: isSmallScreen ? 24 : 28,
                     ),
-                    Text(
-                      fileName,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'PDF Generated Successfully',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 16 : 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Location:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      filePath,
-                      style: const TextStyle(fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),            ElevatedButton.icon(
-              onPressed: () async {
-                Navigator.pop(context);
-                await openFile('$filePath/$fileName');
-              },
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2C5F2D),
-                foregroundColor: Colors.white,
-              ),
+                
+                const SizedBox(height: 16),
+                
+                // Content
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your document has been saved:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: isSmallScreen ? 13 : 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'File Name:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            fileName,
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 12 : 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Location:',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            filePath,
+                            style: TextStyle(fontSize: isSmallScreen ? 11 : 12),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(fontSize: isSmallScreen ? 13 : 14),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await openFile('$filePath/$fileName');
+                      },
+                      icon: Icon(
+                        Icons.open_in_new, 
+                        size: isSmallScreen ? 16 : 18,
+                      ),
+                      label: Text(
+                        'Open',
+                        style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C5F2D),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 12 : 16,
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
