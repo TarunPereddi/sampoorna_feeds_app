@@ -58,7 +58,7 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
       _prefillFormData();
     }
   }
-    void _prefillFormData() {
+  void _prefillFormData() {
     final shipTo = widget.existingShipTo!;
     
     print('🔄 Prefilling form with ship-to data:');
@@ -70,16 +70,7 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
     print('  PostCode: ${shipTo.postCode}');
     print('  Phone: ${shipTo.phoneNo}');
     
-    // Set form values
-    _codeController.text = shipTo.code;
-    _nameController.text = shipTo.name;
-    _addressController.text = shipTo.address ?? '';
-    _address2Controller.text = shipTo.address2 ?? '';
-    _cityController.text = shipTo.city ?? '';
-    _postcodeController.text = shipTo.postCode ?? '';
-    _phoneController.text = shipTo.phoneNo ?? '';
-    
-    // Store original values for comparison
+    // Store original values for comparison FIRST (before setting form values)
     _originalValues = {
       'code': shipTo.code,
       'name': shipTo.name,
@@ -90,6 +81,15 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
       'phoneNo': shipTo.phoneNo ?? '',
       'state': shipTo.state ?? '',
     };
+    
+    // Set form values AFTER storing original values
+    _codeController.text = shipTo.code;
+    _nameController.text = shipTo.name;
+    _addressController.text = shipTo.address ?? '';
+    _address2Controller.text = shipTo.address2 ?? '';
+    _cityController.text = shipTo.city ?? '';
+    _postcodeController.text = shipTo.postCode ?? '';
+    _phoneController.text = shipTo.phoneNo ?? '';
     
     // Load states and set selected state based on shipTo.state
     if (shipTo.state?.isNotEmpty == true) {
@@ -374,13 +374,15 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
                   // Required fields in a more compact layout
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Code field (increased width)
+                  children: [                    // Code field (increased width)
                     Expanded(
-                      flex: 3,
-                      child: _buildCompactField(                        controller: _codeController,
+                      flex: 3,                      child: _buildCompactField(
+                        controller: _codeController,
                         label: 'Code*',
-                        hint: 'Enter unique identifier',                        icon: Icons.code,                        validator: (value) {
+                        hint: _isUpdateMode ? 'Code cannot be changed' : 'Enter unique identifier',
+                        icon: Icons.code,
+                        readOnly: _isUpdateMode, // Make read-only in update mode
+                        validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Required';
                           }
@@ -694,8 +696,7 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
     print('🔍 AddShipToScreen: Validation result: "$result"');
     return result;
   }
-  
-  Widget _buildCompactField({
+    Widget _buildCompactField({
     required TextEditingController controller,
     required String label,
     required String hint,
@@ -704,9 +705,12 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
+    bool readOnly = false, // New parameter for read-only fields
   }) {
     return TextFormField(
-      controller: controller,      decoration: InputDecoration(
+      controller: controller,
+      readOnly: readOnly, // Apply read-only state
+      decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: AppColors.primaryDark, size: 20),
@@ -731,7 +735,7 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
           borderSide: BorderSide(color: Colors.red, width: 2),
         ),
         filled: true,
-        fillColor: AppColors.white,
+        fillColor: readOnly ? Colors.grey[100] : AppColors.white, // Different background for read-only
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 8,
@@ -744,7 +748,10 @@ class _AddShipToScreenState extends State<AddShipToScreen> {
           height: 1.2,
         ),
       ),
-      style: TextStyle(color: AppColors.grey800, fontSize: 14),
+      style: TextStyle(
+        color: readOnly ? Colors.grey[600] : AppColors.grey800, // Different text color for read-only
+        fontSize: 14,
+      ),
       cursorColor: AppColors.primary,
       validator: validator,
       keyboardType: keyboardType,
