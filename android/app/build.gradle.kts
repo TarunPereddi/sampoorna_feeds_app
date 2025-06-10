@@ -3,7 +3,7 @@ import java.io.FileInputStream
 
 // Load keystore properties
 val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("android/key.properties")
+val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
