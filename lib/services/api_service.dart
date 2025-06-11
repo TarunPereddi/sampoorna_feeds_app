@@ -218,10 +218,21 @@ class ApiService {
   Future<dynamic> createShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('ShiptoAddress', body: shipToData);
   }
-
   // Update an existing ship-to address
   Future<dynamic> updateShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('API_ModifyShiptoCOde', body: shipToData);
+  }
+
+  // Update ship-to code for an existing order
+  Future<dynamic> updateOrderShipToCode({
+    required String documentNo,
+    required String shipToCode,
+  }) async {
+    final body = {
+      "documentNo": documentNo,
+      "shiptocode": shipToCode,
+    };
+    return await post('API_OrderShiptocodeModify', body: body);
   }
 
   // Create pincode entry (fire and forget - no response handling needed)
@@ -933,5 +944,93 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       items: items,
       totalCount: totalCount,
     );
+  }
+  // OTP Verification API
+  Future<Map<String, dynamic>> verifyOTP({
+    required String documentNo,
+    required String otp,
+    required String userID,
+  }) async {
+    const String endpoint = 'API_OTPVarification';
+    
+    Map<String, dynamic> requestBody = {
+      'documentNo': documentNo,
+      'otp': otp,
+      'userID': userID,
+    };
+
+    debugPrint('POST Request (OTP Verification): $baseUrl/$endpoint');
+    debugPrint('Request Body: ${json.encode(requestBody)}');
+
+    try {
+      final response = await post(endpoint, body: requestBody);
+      return response ?? {'success': true, 'message': 'OTP verified successfully'};
+    } catch (e) {
+      debugPrint('Error in OTP verification: $e');
+      rethrow;
+    }
+  }
+
+  // Resend OTP API
+  Future<Map<String, dynamic>> resendOTP({
+    required String documentNo,
+  }) async {
+    const String endpoint = 'API_OTPResend';
+    
+    Map<String, dynamic> requestBody = {
+      'documentNo': documentNo,
+    };
+
+    debugPrint('POST Request (Resend OTP): $baseUrl/$endpoint');
+    debugPrint('Request Body: ${json.encode(requestBody)}');
+
+    try {
+      final response = await post(endpoint, body: requestBody);
+      return response ?? {'success': true, 'message': 'OTP sent to registered number'};
+    } catch (e) {
+      debugPrint('Error in resending OTP: $e');
+      rethrow;
+    }
+  }  // Get Sales Shipments for OTP verification
+  Future<List<Map<String, dynamic>>> getSalesShipments({
+    String? salespersonCode,
+  }) async {
+    const String endpoint = 'SalesShipment';
+    
+    Map<String, String> queryParams = {};
+    List<String> filters = [];
+    
+    // Add filter for documents from last 15 days
+    final now = DateTime.now();
+    final fifteenDaysAgo = now.subtract(const Duration(days: 15));
+    final formattedDate = "${fifteenDaysAgo.year}-${fifteenDaysAgo.month.toString().padLeft(2, '0')}-${fifteenDaysAgo.day.toString().padLeft(2, '0')}";
+    filters.add("PostingDate ge $formattedDate");
+    
+    // Add filter for OTP not verified
+    filters.add("OTPVarified eq false");
+      // Add filter to exclude documents with zero or null OTP
+    filters.add("OTP ne 0 and OTP ne null");
+    
+    // Add filter for salesperson if provided
+    if (salespersonCode != null && salespersonCode.isNotEmpty) {
+      filters.add("SalespersonCode eq '$salespersonCode'");
+    }
+    
+    // Combine filters with 'and'
+    queryParams['\$filter'] = filters.join(' and ');
+    
+    // Order by posting date descending to get latest first
+    queryParams['\$orderby'] = 'PostingDate desc';
+
+    debugPrint('GET Request (Sales Shipments): $baseUrl/$endpoint');
+    debugPrint('Filter: ${queryParams['\$filter']}');
+
+    try {
+      final response = await get(endpoint, queryParams: queryParams);
+      return (response['value'] as List<dynamic>).cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('Error fetching sales shipments: $e');
+      rethrow;
+    }
   }
 }

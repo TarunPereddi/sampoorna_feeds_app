@@ -294,53 +294,54 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                 color: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-            // Customer details
+          ),          const SizedBox(width: 16),
+          
+          // Customer details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [                Text(
+              children: [
+                Text(
+                  'ID: ${widget.customerNo}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
                   _customerDetails['Name'] ?? 'N/A',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
-                  maxLines: 2,
+                  maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),                Row(
-                  children: [
-                    Text(
-                      'ID: ${_customerDetails['No'] ?? 'N/A'}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+                const SizedBox(height: 4),
+                // Blocked tag
+                if (isBlocked)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    // Blocked tag under ID
-                    if (isBlocked)
-                      Container(
-                        margin: const EdgeInsets.only(left: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'BLOCKED: ${_customerDetails['Blocked'].toString().toUpperCase()}',
-                          style: TextStyle(
-                            color: Colors.red.shade700,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    child: Text(
+                      'BLOCKED: ${_customerDetails['Blocked'].toString().toUpperCase()}',
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                  ],
-                ),                const SizedBox(height: 8),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                const SizedBox(height: 8),
                 // Generate Report Button (responsive sizing)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -377,8 +378,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               ],
             ),
           ),
-          
-          // Balance indicator
+            // Balance indicator
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -386,17 +386,24 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                 'Balance',
                 style: TextStyle(
                   color: Colors.white70,
-                  fontSize: 14,
+                  fontSize: 12,
                 ),
               ),
-              const SizedBox(height: 4),              Text(
-                formattedNetChange,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: netChange < 0 ? Colors.white : 
-                         netChange > 0 ? Colors.red.shade200 : 
-                         Colors.white,
+              const SizedBox(height: 4),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: Text(
+                  formattedNetChange,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: netChange < 0 ? Colors.white : 
+                           netChange > 0 ? Colors.red.shade200 : 
+                           Colors.white,
+                  ),
+                  textAlign: TextAlign.end,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -783,15 +790,25 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         // Table header
         Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
-          child: Row(
-            children: [
+          child: Row(            children: [
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Text(
                   'Date',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 4,
+                child: Text(
+                  'Document Type',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                     color: Colors.grey.shade700,
                   ),
                 ),
@@ -799,34 +816,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               Expanded(
                 flex: 3,
                 child: Text(
-                  'Document Type',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
                   'Debit',
                   textAlign: TextAlign.end,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontSize: 12,
                     color: Colors.grey.shade700,
                   ),
                 ),
               ),
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Text(
                   'Credit',
                   textAlign: TextAlign.end,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontSize: 12,
                     color: Colors.grey.shade700,
                   ),
                 ),
@@ -853,44 +859,48 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             final creditAmount = transaction['Credit_Amount'] ?? 0.0;
             
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),              child: Row(
                 children: [
                   Expanded(
-                    flex: 2,
-                    child: Text(
-                      postingDate,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),                  Expanded(
                     flex: 3,
                     child: Text(
+                      postingDate,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Text(
                       documentNo,
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 12),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Text(
                       debitAmount > 0 ? _currencyFormat.format(debitAmount) : '',
                       textAlign: TextAlign.end,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 11,
                         color: Colors.red,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Text(
                       creditAmount > 0 ? _currencyFormat.format(creditAmount) : '',
                       textAlign: TextAlign.end,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 11,
                         color: Colors.green.shade700,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

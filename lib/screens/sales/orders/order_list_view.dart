@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/app_colors.dart';
 import 'edit_order_screen.dart';
 import 'view_order_screen.dart';
  
@@ -16,6 +18,24 @@ class OrderListView extends StatelessWidget {
     this.onRefresh,
     this.isNestedInScrollView = false, // Default to false
   });
+
+  // Helper method to format currency values
+  String _formatCurrency(String amountStr) {
+    try {
+      // Remove currency symbol and commas if present
+      String cleanStr = amountStr.replaceAll('₹', '').replaceAll(',', '').trim();
+      double amount = double.tryParse(cleanStr) ?? 0.0;
+      
+      final currencyFormat = NumberFormat.currency(
+        locale: 'en_IN',
+        symbol: '₹',
+        decimalDigits: 0, // No decimals for order list amounts
+      );
+      return currencyFormat.format(amount);
+    } catch (e) {
+      return amountStr; // Return original if parsing fails
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,10 +81,11 @@ class OrderListView extends StatelessWidget {
                     _buildStatusChip(order['status'] as String),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
+                const SizedBox(height: 12),                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start, // Changed to align to top
                   children: [
                     Expanded(
+                      flex: 2, // Give more space to customer column
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -75,16 +96,22 @@ class OrderListView extends StatelessWidget {
                               color: Colors.grey,
                             ),
                           ),
+                          const SizedBox(height: 2), // Small spacing after label
                           Text(
                             order['customerName'] as String,
-                            style: const TextStyle(fontSize: 14),
+                            style: const TextStyle(
+                              fontSize: 11, // Slightly increased from 10
+                              height: 1.3, // Better line height for readability
+                            ),
                             overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+                            maxLines: 3,
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8), // Add spacing between columns
                     Expanded(
+                      flex: 1, // Smaller space for date
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -95,31 +122,38 @@ class OrderListView extends StatelessWidget {
                               color: Colors.grey,
                             ),
                           ),
+                          const SizedBox(height: 2), // Small spacing after label
                           Text(
                             order['date'] as String,
-                            style: const TextStyle(fontSize: 14),
+                            style: const TextStyle(fontSize: 10),
                           ),
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Amount',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
+                    const SizedBox(width: 8), // Add spacing between columns
+                    Expanded(
+                      flex: 1, // Space for amount
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Amount',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
-                        Text(
-                          order['amount'] as String,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                          const SizedBox(height: 2), // Small spacing after label
+                          Text(
+                            _formatCurrency(order['amount'] as String),
+                            style: const TextStyle(
+                              fontSize: 11, // Slightly increased from 10
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.end,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -299,26 +333,28 @@ class OrderListView extends StatelessWidget {
 
     return buttons;
   }
-
   // Status indicator chip with color coding
   Widget _buildStatusChip(String status) {
     Color chipColor;
 
-    switch (status) {
-      case 'Completed':
-        chipColor = Colors.green;
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'released':
+        chipColor = AppColors.statusReleased;
         break;
-      case 'Processing':
-        chipColor = Colors.blue;
+      case 'processing':
+      case 'open':
+        chipColor = AppColors.statusOpen;
         break;
-      case 'Pending':
-        chipColor = Colors.orange;
+      case 'pending':
+      case 'pending approval':
+        chipColor = AppColors.statusPending;
         break;
-      case 'Cancelled':
-        chipColor = Colors.red;
+      case 'cancelled':
+        chipColor = AppColors.error;
         break;
       default:
-        chipColor = Colors.grey;
+        chipColor = AppColors.statusDefault;
     }
 
     return Container(

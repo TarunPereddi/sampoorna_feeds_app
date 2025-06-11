@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/app_colors.dart';
 
 class OrderDetailView extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -297,26 +298,28 @@ class _OrderDetailViewState extends State<OrderDetailView> {
       ],
     );
   }
-
   // Status indicator chip with color coding
   Widget _buildStatusChip(String status) {
     Color chipColor;
 
-    switch (status) {
-      case 'Completed':
-        chipColor = Colors.green;
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'released':
+        chipColor = AppColors.statusCompleted;
         break;
-      case 'Processing':
-        chipColor = Colors.blue;
+      case 'processing':
+      case 'open':
+        chipColor = AppColors.statusOpen;
         break;
-      case 'Pending':
-        chipColor = Colors.orange;
+      case 'pending':
+      case 'pending approval':
+        chipColor = AppColors.statusPending;
         break;
-      case 'Cancelled':
-        chipColor = Colors.red;
+      case 'cancelled':
+        chipColor = AppColors.error;
         break;
       default:
-        chipColor = Colors.grey;
+        chipColor = AppColors.statusDefault;
     }
 
     return Container(

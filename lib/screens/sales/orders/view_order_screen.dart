@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../services/api_service.dart';
 import '../../../models/location.dart';
+import '../../../utils/app_colors.dart';
 import 'edit_order_screen.dart';
 
 class ViewOrderScreen extends StatefulWidget {
@@ -25,9 +26,18 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
   
   // Cached total to avoid recalculation
   double? _cachedTotal;
-  
-  // Static cache for locations to avoid repeated API calls
+    // Static cache for locations to avoid repeated API calls
   static final Map<String, Location> _locationCache = {};
+
+  // Helper method to format currency values
+  String _formatCurrency(double value) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return currencyFormat.format(value);
+  }
   
   // Controllers for form fields (read-only)
   final TextEditingController _orderDateController = TextEditingController();
@@ -186,25 +196,27 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
     }
     return 'N/A';
   }
-
   Widget _buildStatusChip(String status) {
     Color chipColor;
     
     switch (status.toLowerCase()) {
       case 'open':
-        chipColor = Colors.blue;
+        chipColor = AppColors.statusOpen;
         break;
       case 'released':
-        chipColor = Colors.orange;
+        chipColor = AppColors.statusReleased;
         break;
       case 'pending approval':
-        chipColor = Colors.amber;
+        chipColor = AppColors.statusPending;
         break;
       case 'pending prepayment':
-        chipColor = Colors.purple;
+        chipColor = AppColors.statusPending;
+        break;
+      case 'completed':
+        chipColor = AppColors.statusCompleted;
         break;
       default:
-        chipColor = Colors.grey;
+        chipColor = AppColors.statusDefault;
     }
 
     return Container(
@@ -274,8 +286,7 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
               child: _buildStatusChip(_orderData?['Status'] ?? 'Unknown'),
             ),
             const SizedBox(height: 16),
-            
-            Table(
+              Table(
               columnWidths: const {
                 0: FlexColumnWidth(0.4),
                 1: FlexColumnWidth(0.6),
@@ -283,7 +294,6 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
               children: [
                 _buildInfoRow('Order Date:', _orderDateController.text),
                 _buildInfoRow('Customer:', _orderData?['Sell_to_Customer_Name'] ?? 'Unknown Customer'),
-                _buildInfoRow('Sale Code:', _saleCodeController.text),
                 _buildInfoRow('Ship-to Address:', _getFormattedShipToAddress()),
                 _buildInfoRow('Location:', _getLocationName(_orderData?['Location_Code'])),
               ],
@@ -319,9 +329,8 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
                     color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.green),
-                  ),
-                  child: Text(
-                    'Total: ₹${totalAmount.toStringAsFixed(2)}',
+                  ),                  child: Text(
+                    'Total: ${_formatCurrency(totalAmount)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.green,
@@ -416,18 +425,16 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
                         '${quantity.toString()} $unitOfMeasure',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${unitPrice.toStringAsFixed(2)}',
+                      const SizedBox(height: 4),                      Text(
+                        _formatCurrency(unitPrice),
                         style: const TextStyle(fontSize: 13),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    '₹${lineAmount.toStringAsFixed(2)}',
+                Expanded(                  child: Text(
+                    _formatCurrency(lineAmount),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -446,9 +453,8 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
                 Text(
                   'Qty: ${quantity.toString()} $unitOfMeasure',
                   style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  '₹${unitPrice.toStringAsFixed(2)} each',
+                ),                Text(
+                  '${_formatCurrency(unitPrice)} each',
                   style: const TextStyle(fontSize: 13),
                 ),
               ],
@@ -460,9 +466,8 @@ class _ViewOrderScreenState extends State<ViewOrderScreen> {
                 const Text(
                   'Total:',
                   style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  '₹${lineAmount.toStringAsFixed(2)}',
+                ),                Text(
+                  _formatCurrency(lineAmount),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

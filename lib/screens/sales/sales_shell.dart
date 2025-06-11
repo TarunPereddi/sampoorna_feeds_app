@@ -7,6 +7,7 @@ import 'orders/orders_screen.dart';  // Using our optimized screen
 import 'customers/customers_screen.dart';
 // import 'queries/queries_screen.dart'; // Commented out - queries tab removed
 import 'profile/profile_screen.dart';
+import 'delivery/delivery_screen.dart';
 import 'orders/edit_order_screen.dart';
 import '../../services/auth_service.dart';
 import '../../providers/tab_refresh_provider.dart';
@@ -161,9 +162,7 @@ class _SalesShellState extends State<SalesShell> {
                           ),
                   ),
                 ),
-                */
-
-                // Profile Tab
+                */                // Delivery Tab (previously Profile)
                 Offstage(
                   offstage: _selectedIndex != 3, // Changed from 4 to 3
                   child: RepaintBoundary(
@@ -171,7 +170,7 @@ class _SalesShellState extends State<SalesShell> {
                         ? Container() // Don't build if not visible and not initialized
                         : _buildTabNavigator(
                             3, // Changed from 4 to 3
-                            (context) => const ProfileScreen(),
+                            (context) => const DeliveryScreen(),
                           ),
                   ),
                 ),
@@ -218,14 +217,13 @@ class _SalesShellState extends State<SalesShell> {
                         BottomNavigationBarItem(
                           icon: Icon(Icons.person_search),
                           label: 'Customers',
-                        ),
-                        // BottomNavigationBarItem( // Queries tab commented out
+                        ),                        // BottomNavigationBarItem( // Queries tab commented out
                         //   icon: Icon(Icons.question_answer),
                         //   label: 'Queries',
                         // ),
                         BottomNavigationBarItem(
-                          icon: Icon(Icons.person),
-                          label: 'Profile',
+                          icon: Icon(Icons.local_shipping),
+                          label: 'Delivery',
                         ),
                       ],
                     );

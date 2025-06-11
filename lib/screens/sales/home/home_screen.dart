@@ -12,6 +12,7 @@ import '../../../mixins/tab_refresh_mixin.dart';
 import '../orders/create_order_screen.dart';
 import '../orders/order_list_view.dart'; // Added import
 import '../orders/order_table_view.dart'; // Added import
+import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -237,15 +238,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             ),
           ],
         ),
-        backgroundColor: AppColors.primaryDark,
-        actions: [          // Profile Avatar Dropdown
+        backgroundColor: AppColors.primaryDark,        actions: [          // Profile Avatar Dropdown
           if (salesPerson != null)
             PopupMenuButton<String>(
               offset: const Offset(0, 50), // Position dropdown below the avatar
               onSelected: (value) {
                 if (value == 'profile') {
-                  // Navigate to profile tab using NavigationService
-                  NavigationService.navigateToTab(context, 3);
+                  // Navigate directly to ProfileScreen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
                 } else if (value == 'logout') {
                   _showLogoutDialog(context, authService);
                 }

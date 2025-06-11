@@ -401,12 +401,19 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                     ),
                   ),
                   const SizedBox(width: 12),
-                  
-                  // Name and details
+                    // Name and details
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      crossAxisAlignment: CrossAxisAlignment.start,                      children: [
+                        Text(
+                          'ID: ${customer.no}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
                         Text(
                           customer.name,
                           style: TextStyle(
@@ -414,17 +421,9 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                             fontSize: 16,
                             color: isBlocked ? Colors.red.shade800 : Colors.black87,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          customer.no,
-                          style: TextStyle(
-                            color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
-                            fontSize: 13,
-                          ),
-                        ),                        if (customer.balanceLcy != 0) ...[
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,                        ),
+                        if (customer.balanceLcy != 0) ...[
                           const SizedBox(height: 2),
                           Text(
                             'Balance: ${_formatCurrency(customer.balanceLcy)}',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/app_colors.dart';
 
 class VendorOrderDetailScreen extends StatelessWidget {
   final String orderId;

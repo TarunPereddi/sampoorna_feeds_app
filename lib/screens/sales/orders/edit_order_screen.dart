@@ -7,10 +7,13 @@ import 'package:provider/provider.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/location.dart';
+import '../../../models/ship_to.dart';
+import '../../../utils/app_colors.dart';
 // import '../../../models/item.dart';
 // import '../../../models/item_unit_of_measure.dart';
 import 'order_item_form_widget.dart';
 import 'order_items_list_widget.dart';
+import 'ship_to_selection_screen.dart';
 
 class EditOrderScreen extends StatefulWidget {
   final String orderNo;
@@ -30,15 +33,21 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   Map<String, dynamic>? _orderData;
   List<Map<String, dynamic>> _orderItems = [];
   List<Location> _locations = [];
+  List<ShipTo> _shipToAddresses = [];
 
   List<Map<String, dynamic>> _originalItems = [];
   List<int> _itemsToDelete = [];
   List<Map<String, dynamic>> _itemsToAdd = [];
-  
-  // Controllers for editable fields
+    // Controllers for editable fields
   final TextEditingController _orderDateController = TextEditingController();
   final TextEditingController _deliveryDateController = TextEditingController();
   final TextEditingController _saleCodeController = TextEditingController();
+  final TextEditingController _shipToCodeController = TextEditingController();
+  
+  // Track changes for ship-to address
+  String? _originalShipToCode;
+  String? _originalShipToName;
+  bool _shipToCodeChanged = false;
   
   // Error state
   String? _errorMessage;
@@ -49,12 +58,12 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     super.initState();
     _loadOrderDetails();
   }
-
   @override
   void dispose() {
     _orderDateController.dispose();
     _deliveryDateController.dispose();
     _saleCodeController.dispose();
+    _shipToCodeController.dispose();
     super.dispose();
   }
 
@@ -108,7 +117,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       } else {
         debugPrint('Customer_Price_Group from order: ${_orderData!['Customer_Price_Group']}');
       }      // Keep a copy of existing items to check for undeletable status
-      final List<Map<String, dynamic>> previousItems = List.from(_orderItems);
+      // final List<Map<String, dynamic>> previousItems = List.from(_orderItems);
 
       // Fetch order lines
       final orderLines = await _apiService.getSalesOrderLines(widget.orderNo);
@@ -214,7 +223,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     }
   }
 
-
   void _initializeFormData() {
     if (_orderData != null) {
       // Format dates for display
@@ -241,6 +249,40 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       if (_orderData!['Sell_to_Customer_No'] != null) {
         _saleCodeController.text = 'SC-${_orderData!['Sell_to_Customer_No']}';
       }
+        // Initialize ship-to code and track original value
+      final shipToCode = _orderData!['Ship_to_Code'] as String? ?? '';
+      final shipToName = _orderData!['Ship_to_Name'] as String? ?? '';
+      _shipToCodeController.text = shipToCode;
+      _originalShipToCode = shipToCode;
+      _originalShipToName = shipToName;
+      _shipToCodeChanged = false;
+      
+      // Add listener to track changes
+      _shipToCodeController.addListener(_onShipToCodeChanged);
+      
+      // Fetch ship-to addresses for the customer
+      final customerNo = _orderData!['Sell_to_Customer_No'] as String?;
+      if (customerNo != null && customerNo.isNotEmpty) {
+        _fetchShipToAddresses(customerNo);
+      }
+    }
+  }
+    void _onShipToCodeChanged() {
+    final currentValue = _shipToCodeController.text.trim();
+    setState(() {
+      _shipToCodeChanged = currentValue != (_originalShipToCode ?? '');
+    });
+  }
+
+  Future<void> _fetchShipToAddresses(String customerNo) async {
+    try {
+      final shipToData = await _apiService.getShipToAddresses(customerNo: customerNo);
+      setState(() {
+        _shipToAddresses = shipToData.map((json) => ShipTo.fromJson(json)).toList();
+      });
+    } catch (e) {
+      debugPrint('Error loading ship-to addresses: $e');
+      // Don't show error to user as this is not critical for editing
     }
   }
 
@@ -437,9 +479,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 12), // Reduced spacing
-                  
-                  // Order information as a simple table
+                  const SizedBox(height: 12), // Reduced spacing                  // Order information as a simple table
                   Table(
                     columnWidths: const {
                       0: FlexColumnWidth(0.4),
@@ -448,9 +488,8 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                     children: [
                       _buildInfoRow('Order Date:', _orderDateController.text),
                       _buildInfoRow('Customer:', _orderData!['Sell_to_Customer_Name'] ?? 'Unknown Customer'),
-                      _buildInfoRow('Sale Code:', _saleCodeController.text),
                       _buildInfoRow('Delivery Date:', _deliveryDateController.text),
-                      _buildInfoRow('Ship-to Address:', _getFormattedShipToAddress()),
+                      _buildEditableShipToRow(),
                       _buildInfoRow('Location:', _getLocationName(_orderData!['Location_Code'])),
                     ],
                   ),
@@ -580,8 +619,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       total += item['totalAmount'] as double;
     }
     return total;
-  }
-  // Save all changes to the order
+  }  // Save all changes to the order
   Future<void> _saveOrderChanges() async {
     setState(() {
       _isSubmitting = true;
@@ -598,8 +636,27 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         await _apiService.reopenSalesOrder(widget.orderNo);
       }
 
+      // 2. Update ship-to code if it has changed
+      if (_shipToCodeChanged) {
+        _updateSubmissionStatus('Updating ship-to address...');
+        final newShipToCode = _shipToCodeController.text.trim();
+        debugPrint('Updating ship-to code from "${_originalShipToCode}" to "$newShipToCode"');
+        try {
+          await _apiService.updateOrderShipToCode(
+            documentNo: widget.orderNo,
+            shipToCode: newShipToCode,
+          );
+          debugPrint('Ship-to code updated successfully');
+        } catch (e) {
+          debugPrint('Error updating ship-to code: $e');
+          throw Exception('Failed to update ship-to address: $e');
+        }
+      }
+
       debugPrint('Order items count before saving: ${_orderItems.length}');
-      debugPrint('Items to delete count: ${_itemsToDelete.length}');      // 2. Delete items that need to be removed
+      debugPrint('Items to delete count: ${_itemsToDelete.length}');
+
+      // 3. Delete items that need to be removed
       if (_itemsToDelete.isNotEmpty) {
         _updateSubmissionStatus('Removing items...');
         
@@ -720,6 +777,12 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         }
       }      _updateSubmissionStatus('Order updated successfully!');
       
+      // Reset ship-to code change tracking after successful update
+      if (_shipToCodeChanged) {
+        _originalShipToCode = _shipToCodeController.text.trim();
+        _shipToCodeChanged = false;
+      }
+      
       // Determine if we should return to order screen or stay on edit screen
       bool shouldStayOnEditScreen = failedDeletions.isNotEmpty;
         // Show success message only if everything was successful
@@ -769,8 +832,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         _submissionStatus = status;
       });
     }
-  }
-    TableRow _buildInfoRow(String label, String value) {
+  }    TableRow _buildInfoRow(String label, String value) {
     return TableRow(
       children: [
         Padding(
@@ -797,25 +859,132 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       ],
     );
   }
-  
-  Widget _buildStatusChip(String status) {
+  TableRow _buildEditableShipToRow() {
+    // Get current ship-to display text (code + name if available)
+    String displayText = _shipToCodeController.text.trim();
+    if (_originalShipToName != null && _originalShipToName!.isNotEmpty) {
+      displayText = '${_shipToCodeController.text.trim()} - $_originalShipToName';
+    }
+    
+    return TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6.0),
+          child: Text(
+            'Ship-to Code:',
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2.0),
+          child: GestureDetector(
+            onTap: () async {
+              // Check if we have customer data
+              final customerNo = _orderData?['Sell_to_Customer_No'] as String?;
+              if (customerNo == null || customerNo.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Customer information not available')),
+                );
+                return;
+              }
+              
+              // Find currently selected ship-to
+              ShipTo? currentShipTo;
+              if (_shipToCodeController.text.trim().isNotEmpty && _shipToAddresses.isNotEmpty) {
+                try {
+                  currentShipTo = _shipToAddresses.firstWhere(
+                    (shipTo) => shipTo.code == _shipToCodeController.text.trim(),
+                  );
+                } catch (e) {
+                  // Ship-to not found in list, ignore
+                }
+              }
+              
+              final selectedShipTo = await Navigator.push<ShipTo>(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ShipToSelectionScreen(
+                    customerNo: customerNo,
+                    initialSelection: currentShipTo,
+                  ),
+                ),
+              );
+              
+              if (selectedShipTo != null) {
+                setState(() {
+                  _shipToCodeController.text = selectedShipTo.code;
+                  _originalShipToName = selectedShipTo.name;
+                  _shipToCodeChanged = selectedShipTo.code != (_originalShipToCode ?? '');
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(4),
+                color: Colors.white,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      displayText.isNotEmpty ? displayText : 'Tap to select ship-to address',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        color: displayText.isNotEmpty ? Colors.black : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_shipToCodeChanged)
+                        Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: Colors.orange.shade600,
+                        ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        size: 18,
+                        color: Colors.grey.shade600,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+    Widget _buildStatusChip(String status) {
     Color chipColor;
 
-    switch (status) {
-      case 'Completed':
-        chipColor = Colors.green;
+    switch (status.toLowerCase()) {
+      case 'completed':
+        chipColor = AppColors.statusCompleted;
         break;
-      case 'Released':
-        chipColor = Colors.blue;
+      case 'released':
+        chipColor = AppColors.statusReleased;
         break;
-      case 'Pending Approval':
-        chipColor = Colors.orange;
+      case 'pending approval':
+        chipColor = AppColors.statusPending;
         break;
-      case 'Open':
-        chipColor = Colors.purple;
+      case 'open':
+        chipColor = AppColors.statusOpen;
         break;
       default:
-        chipColor = Colors.grey;
+        chipColor = AppColors.statusDefault;
     }
 
     return Container(
@@ -834,24 +1003,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       ),
     );
   }
-  
-  String _getFormattedShipToAddress() {
-    final shipToCode = _orderData!['Ship_to_Code'] as String? ?? '';
-    final shipToName = _orderData!['Ship_to_Name'] as String? ?? '';
-    final shipToAddress = _orderData!['Ship_to_Address'] as String? ?? '';
-    
-    if (shipToName.isNotEmpty && shipToCode.isNotEmpty) {
-      return '$shipToCode - $shipToName${shipToAddress.isNotEmpty ? '\n$shipToAddress' : ''}';
-    } else if (shipToName.isNotEmpty) {
-      return shipToName;
-    } else if (shipToCode.isNotEmpty) {
-      return shipToCode;
-    } else {
-      return 'No ship-to address specified';
-    }
-  }
-  
-  String _getLocationName(String? locationCode) {
+    String _getLocationName(String? locationCode) {
     if (locationCode == null || locationCode.isEmpty) {
       return 'No location specified';
     }

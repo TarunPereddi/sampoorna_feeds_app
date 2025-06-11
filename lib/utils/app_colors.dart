@@ -15,9 +15,9 @@ class AppColors {
   static const infoLight = Color.fromARGB(164, 187, 222, 251);
 
   // Order Status Colors
-  static const statusPending = Color(0xFFFF9800); // Orange for pending
-  static const statusReleased = Color(0xFF2196F3); // Blue for released
-  static const statusOpen = Color(0xFF4CAF50); // Green for open
+  static const statusPending = Color.fromARGB(255, 255, 0, 0); // Orange for pending
+  static const statusReleased = Color(0xFF4CAF50); // Blue for released
+  static const statusOpen = Color(0xFF2196F3); // Green for open
   static const statusCompleted = Color(0xFF4CAF50); // Green for completed
   static const statusDefault = Color(0xFF9E9E9E); // Grey for default
   

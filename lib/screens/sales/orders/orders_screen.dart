@@ -44,12 +44,11 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
   final int _itemsPerPage = 10;
   bool _isLoading = false;
   bool _isInitialLoading = true;
-  
-  // Status filter options - matching with tabs
+    // Status filter options - matching with tabs
   final List<String> _statusTabs = [
     'All',
     'Open', 
-    'Pending Approval',
+    'Pending',
     'Approved',
   ];
 
@@ -104,14 +103,13 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
       _dataLoaded = true;
     }
   }
-  
-  // Helper method to set initial status and update tab controller
+    // Helper method to set initial status and update tab controller
   void _setInitialStatus(String status) {
     // Map the incoming status to our tab status
     String mappedStatus;
     switch (status) {
       case 'Pending Approval':
-        mappedStatus = 'Pending Approval';
+        mappedStatus = 'Pending';
         break;
       case 'Released':
       case 'Approved':
@@ -158,7 +156,6 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
       _loadOrders();
     }
   }
-
   // Convert tab index to API status value
   String? _getApiStatusValue(String tabStatus) {
     // Return null for "All" to not filter by status
@@ -167,7 +164,7 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
     // Map the tab names to actual API status values
     switch (tabStatus) {
       case 'Open': return 'Open';
-      case 'Pending Approval': return 'Pending Approval';
+      case 'Pending': return 'Pending Approval';
       case 'Approved': return 'Released';
       default: return null;
     }
