@@ -47,9 +47,31 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
-		<key>UIViewControllerBasedStatusBarAppearance</key>
-		<false/>
+		<key>UIViewControllerBasedStatusBarAppearance</key>		<false/>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>This app needs access to save PDF files</string>
+		<!-- Add support for PDF files sharing via Files app -->
+		<key>CFBundleDocumentTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeName</key>
+				<string>PDF Document</string>
+				<key>CFBundleTypeRole</key>
+				<string>Viewer</string>
+				<key>CFBundleTypeIconFiles</key>
+				<array/>
+				<key>LSItemContentTypes</key>
+				<array>
+					<string>com.adobe.pdf</string>
+				</array>
+				<key>LSHandlerRank</key>
+				<string>Owner</string>
+			</dict>
+		</array>
+		<!-- Enable iTunes file sharing for easier access to app documents -->
+		<key>UIFileSharingEnabled</key>
+		<true/>
+		<key>LSSupportsOpeningDocumentsInPlace</key>
+		<true/>
 	</dict>
 </plist>

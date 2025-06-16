@@ -295,8 +295,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
               ),
             ),
           ),          const SizedBox(width: 16),
-          
-          // Customer details
+            // Customer details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,7 +316,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
-                  maxLines: 4,
+                  maxLines: 2, // Reduced from 4 to 2 lines to prevent excessive spanning
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
@@ -341,72 +340,82 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                const SizedBox(height: 8),
-                // Generate Report Button (responsive sizing)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isSmallScreen = MediaQuery.of(context).size.width < 400;
-                      return ElevatedButton.icon(
-                        onPressed: () => _showReportGenerationDialog(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
-                          elevation: 0,
-                          padding: EdgeInsets.symmetric(
-                            vertical: isSmallScreen ? 6 : 8, 
-                            horizontal: isSmallScreen ? 12 : 16,
+                const SizedBox(height: 8),                // Generate Report Button and Balance on same line
+                Row(
+                  children: [
+                    // Generate Report Button (with width limit)
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isSmallScreen = MediaQuery.of(context).size.width < 400;
+                        final buttonWidth = isSmallScreen ? 140.0 : 160.0; // Fixed width limit
+                        
+                        return SizedBox(
+                          width: buttonWidth,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showReportGenerationDialog(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
+                              elevation: 0,
+                              padding: EdgeInsets.symmetric(
+                                vertical: isSmallScreen ? 6 : 8, 
+                                horizontal: isSmallScreen ? 6 : 8, // Reduced horizontal padding
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            icon: Icon(Icons.description, size: isSmallScreen ? 16 : 18),
+                            label: Flexible(
+                              child: Text(
+                                'Generate Report',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 10 : 12, // Smaller font to fit
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
                           ),
-                          minimumSize: Size(isSmallScreen ? 120 : 140, 0),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        icon: Icon(Icons.description, size: isSmallScreen ? 16 : 18),
-                        label: Text(
-                          'Generate Report',
+                        );
+                      },
+                    ),
+                    const Spacer(), // This will push the balance to the right
+                    // Balance indicator
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          'Balance',
                           style: TextStyle(
-                            fontSize: isSmallScreen ? 12 : 14,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.white70,
+                            fontSize: 11, // Slightly smaller font
                           ),
                         ),
-                      );
-                    },
-                  ),
+                        const SizedBox(height: 2),
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 100), // Reduced width
+                          child: Text(
+                            formattedNetChange,
+                            style: TextStyle(
+                              fontSize: 13, // Slightly smaller font
+                              fontWeight: FontWeight.bold,
+                              color: netChange < 0 ? Colors.white : 
+                                     netChange > 0 ? Colors.red.shade200 : 
+                                     Colors.white,
+                            ),
+                            textAlign: TextAlign.end,
+                            maxLines: 1, // Reduced to single line
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-            // Balance indicator
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text(
-                'Balance',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                constraints: const BoxConstraints(maxWidth: 120),
-                child: Text(
-                  formattedNetChange,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: netChange < 0 ? Colors.white : 
-                           netChange > 0 ? Colors.red.shade200 : 
-                           Colors.white,
-                  ),
-                  textAlign: TextAlign.end,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -1384,32 +1393,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           },
         );
         return;
-      }
-        // Generate unique filename and save PDF
+      }        // Generate unique filename and save PDF using improved cross-platform method
       final fileName = _generateUniqueFileName(reportType);
-      String? savedFilePath = await PdfService.saveToDownloads(
+      await PdfService.savePdfCrossPlatform(
         base64String: base64String,
         fileName: fileName,
         context: context,
+        showShareDialog: true,
       );
       
-      if (savedFilePath == null) {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Error'),
-              content: Text('Failed to save ${reportType}. Please try again.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            );
-          },
-        );
-      }
+      // Note: Error handling is now done within the savePdfCrossPlatform method
+      // which provides platform-specific user-friendly messages and actions
     } catch (e) {
       // Close loading dialog if still open
       if (Navigator.canPop(context)) {

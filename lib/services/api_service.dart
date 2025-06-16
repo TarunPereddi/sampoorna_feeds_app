@@ -20,7 +20,6 @@ class ApiService {
   static const String username = 'JobQueue';
   static const String password = 'India@12good';
   static const String company = 'Sampoorna Feeds Pvt. Ltd';
-
   // Create basic auth header
   Map<String, String> get _headers {
     String basicAuth = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
@@ -30,8 +29,26 @@ class ApiService {
       'Content-Type': 'application/json',
     };
   }
-
-  // Generic GET method for API calls
+  // Helper method to handle network errors only
+  String _handleError(dynamic error) {
+    String errorString = error.toString();
+    
+    // Only handle network/internet connection related errors
+    if (errorString.contains('SocketException') || 
+        errorString.contains('NetworkException') ||
+        errorString.contains('Connection failed') ||
+        errorString.contains('No address associated with hostname') ||
+        errorString.contains('Connection refused') ||
+        errorString.contains('Connection timed out') ||
+        errorString.contains('Network is unreachable') ||
+        errorString.contains('TimeoutException') || 
+        errorString.contains('timeout')) {
+      return 'Could not connect to server. Please check your internet connection.';
+    }
+    
+    // For all other errors, return the original error message
+    return errorString;
+  }// Generic GET method for API calls
   Future<dynamic> get(String endpoint, {Map<String, String>? queryParams}) async {
     Map<String, String> params = {
       'Company': company,
@@ -45,7 +62,8 @@ class ApiService {
     debugPrint('GET Request: $uri');
 
     try {
-      final response = await http.get(uri, headers: _headers);
+      final response = await http.get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 30)); // Add timeout
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -53,11 +71,9 @@ class ApiService {
         throw Exception('Failed to load data: ${response.statusCode}\n${response.body}');
       }
     } catch (e) {
-      throw Exception('Error connecting to the API: $e');
+      throw Exception(_handleError(e));
     }
-  }
-
-  // For POST requests
+  }  // For POST requests
   Future<dynamic> post(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams}) async {
     Map<String, String> params = {
       'Company': company,
@@ -80,7 +96,7 @@ class ApiService {
         uri,
         headers: headers,
         body: json.encode(body),
-      );
+      ).timeout(const Duration(seconds: 30)); // Add timeout
       
       debugPrint('POST Response Status: ${response.statusCode}');
       debugPrint('POST Response Body: ${response.body}');
@@ -91,7 +107,7 @@ class ApiService {
         throw Exception('Failed to post data: ${response.statusCode}\n${response.body}');
       }
     } catch (e) {
-      throw Exception('Error connecting to the API: $e');
+      throw Exception(_handleError(e));
     }
   }
 

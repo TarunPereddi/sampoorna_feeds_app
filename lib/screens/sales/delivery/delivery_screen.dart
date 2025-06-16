@@ -306,23 +306,22 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
         );
       },
     );
-  }
-  @override
+  }  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: CommonAppBar(
         title: 'Delivery OTP',
-      ),      body: RefreshIndicator(
+      ),
+      body: RefreshIndicator(
         onRefresh: performRefresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header Section
+              // Compact Header Section
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16), // Reduced from 20
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -334,23 +333,23 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                   children: [
                     Icon(
                       Icons.verified_user,
-                      size: 60,
+                      size: 40, // Reduced from 60
                       color: AppColors.primary,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8), // Reduced from 12
                     Text(
                       'OTP Verification',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 20, // Reduced from 24
                         fontWeight: FontWeight.bold,
                         color: AppColors.grey900,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4), // Reduced from 8
                     Text(
                       'Select document and verify OTP for delivery',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12, // Reduced from 14
                         color: AppColors.grey600,
                       ),
                       textAlign: TextAlign.center,
@@ -359,18 +358,20 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                 ),
               ),
               
-              const SizedBox(height: 24),
+              const SizedBox(height: 16), // Reduced from 24
               
               // Document Selection Section
               Text(
                 'Document Number',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14, // Reduced from 16
                   fontWeight: FontWeight.w600,
                   color: AppColors.grey800,
                 ),
               ),
-              const SizedBox(height: 8),              TextFormField(
+              const SizedBox(height: 6), // Reduced from 8
+              
+              TextFormField(
                 controller: _documentController,
                 readOnly: true,
                 decoration: InputDecoration(
@@ -389,23 +390,23 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                             ),
                           ),
                         )
-                      : Icon(Icons.search, color: AppColors.primary),
-                  border: OutlineInputBorder(
+                      : Icon(Icons.search, color: AppColors.primary),                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: AppColors.primary),
                   ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), // Reduced padding
                 ),
                 onTap: _selectDocument,
               ),
-              
-              // Selected Document Details
+                // Selected Document Details - More compact
               if (_selectedShipment != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12), // Reduced from 16
                 Container(
-                  padding: const EdgeInsets.all(16),                  decoration: BoxDecoration(
+                  padding: const EdgeInsets.all(12), // Reduced from 16
+                  decoration: BoxDecoration(
                     color: AppColors.grey100,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.grey200),
@@ -416,38 +417,37 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                       Text(
                         'Document Details',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 12, // Reduced from 14
                           fontWeight: FontWeight.w600,
                           color: AppColors.grey800,
                         ),
                       ),
-                      const SizedBox(height: 8),                      _buildDetailRow('Customer', _selectedShipment!.customerName),
+                      const SizedBox(height: 6), // Reduced from 8_buildDetailRow('Customer', _selectedShipment!.customerName),
                       _buildDetailRow('Customer Code', _selectedShipment!.customerCode),
                       _buildDetailRow('Posting Date', _selectedShipment!.postingDate),
                     ],
                   ),
                 ),
               ],
-              
-              const SizedBox(height: 24),
+                const SizedBox(height: 16), // Reduced from 24
               
               // OTP Input Section
               Text(
                 'Enter OTP',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14, // Reduced from 16
                   fontWeight: FontWeight.w600,
                   color: AppColors.grey800,
                 ),
-              ),              const SizedBox(height: 8),
+              ),
+              const SizedBox(height: 6), // Reduced from 8
               TextFormField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
-                ],
-                decoration: InputDecoration(
+                ],                decoration: InputDecoration(
                   hintText: 'Enter 6-digit OTP',
                   prefixIcon: Icon(Icons.lock, color: AppColors.primary),
                   border: OutlineInputBorder(
@@ -457,12 +457,12 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: AppColors.primary),
                   ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), // Reduced padding
                 ),
                 enabled: _selectedShipment != null,
               ),
-              
-              // Resend OTP Link
-              const SizedBox(height: 12),
+                // Resend OTP Link - More compact
+              const SizedBox(height: 8), // Reduced from 12
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -472,60 +472,60 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             SizedBox(
-                              width: 14,
-                              height: 14,
+                              width: 12, // Reduced from 14
+                              height: 12, // Reduced from 14
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            const Text('Resending...'),
+                            const SizedBox(width: 6), // Reduced from 8
+                            const Text('Resending...', style: TextStyle(fontSize: 12)),
                           ],
                         )
-                      : const Text('Resend OTP'),
+                      : const Text('Resend OTP', style: TextStyle(fontSize: 12)),
                   style: TextButton.styleFrom(
                     foregroundColor: _selectedShipment != null 
                         ? AppColors.primary 
                         : AppColors.grey400,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // Reduced padding
                   ),
                 ),
               ),
+                const SizedBox(height: 16), // Reduced from 32
               
-              const SizedBox(height: 32),
-                // Verify Button
+              // Verify Button - More compact
               ElevatedButton.icon(
                 onPressed: (_selectedShipment != null && !_isVerifying) ? _verifyOTP : null,
                 icon: _isVerifying 
                     ? SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 14, // Reduced from 16
+                        height: 14, // Reduced from 16
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
                         ),
                       )
-                    : const Icon(Icons.verified),
+                    : const Icon(Icons.verified, size: 18), // Reduced icon size
                 label: Text(_isVerifying ? 'Verifying...' : 'Verify OTP'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12), // Reduced from 16
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                   textStyle: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 14, // Reduced from 16
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               
-              const SizedBox(height: 16),
-              
-              // Instructions
+              const Spacer(), // This will push instructions to bottom
+                // Instructions - More compact at bottom
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12), // Reduced from 16
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -536,14 +536,14 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
                     Icon(
                       Icons.info_outline,
                       color: Colors.blue,
-                      size: 20,
+                      size: 16, // Reduced from 20
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8), // Reduced from 12
                     Expanded(
                       child: Text(
                         'First select a document number, then enter the OTP to verify delivery.',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 11, // Reduced from 13
                           color: Colors.blue.shade800,
                         ),
                       ),
@@ -554,21 +554,21 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
             ],
           ),
         ),
-      ),    );
+      ),
+    );
   }
-
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 3), // Reduced from 4
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 90, // Reduced from 100
             child: Text(
               '$label:',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 11, // Reduced from 13
                 color: AppColors.grey600,
               ),
             ),
@@ -577,7 +577,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 11, // Reduced from 13
                 fontWeight: FontWeight.w500,
                 color: AppColors.grey800,
               ),
