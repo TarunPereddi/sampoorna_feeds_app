@@ -16,7 +16,7 @@ class PaginationResult<T> {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://api.sampoornafeeds.in:7048/BC230/ODataV4';
+  static const String baseUrl = 'https://api.sampoornafeeds.in:7048/BC230/ODataV4';
   static const String username = 'JobQueue';
   static const String password = 'India@12good';
   static const String company = 'Sampoorna Feeds Pvt. Ltd';
