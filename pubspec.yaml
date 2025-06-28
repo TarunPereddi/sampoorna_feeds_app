@@ -1,0 +1,71 @@
+name: sampoorna_feeds_app
+description: "Professional livestock feed business management and inventory tracking solution for distributors and retailers."
+publish_to: 'none'
+
+version: 1.0.0+2
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+
+  flutter:
+    sdk: flutter
+
+  # UI/UX Packages
+  cupertino_icons: ^1.0.8
+  intl: ^0.20.2
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  lottie: ^3.1.0 # For animations
+  
+  # State Management
+  provider: ^6.1.2 # For state management
+  
+  # Networking
+  http: ^1.2.0
+  connectivity_plus: ^5.0.2 # For checking internet connectivity
+  
+  # Storage
+  shared_preferences: ^2.2.2 # For simple data persistence
+  sqflite: ^2.3.2 # For local database
+  path_provider: ^2.1.2
+    # Utils
+  url_launcher: ^6.2.5 # For launching URLs, phone calls, etc.
+  share_plus: ^7.2.2 # For sharing content
+  permission_handler: ^11.3.0 # For requesting permissions
+  package_info_plus: ^5.0.1 # For getting app version info
+  flutter_dotenv: ^5.1.0 # For environment variables
+  open_filex: ^4.3.4 # For opening files with native apps
+  
+  # Responsive UI
+  responsive_framework: ^1.1.1
+  device_info_plus: ^9.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.5
+  build_runner: ^2.4.8
+
+flutter_native_splash:
+  color: "#90EE90"
+  color_dark: "#90EE90"  # Ensure dark theme uses same color
+  image: assets/app_logo.png
+  android: true
+  ios: true
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/app_logo.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
