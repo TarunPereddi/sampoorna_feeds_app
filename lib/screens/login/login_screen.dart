@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/persona_state.dart';
 import '../../utils/app_colors.dart';
 import 'forgot_password_screen.dart';
 import 'first_time_password_change_screen.dart';
@@ -371,9 +372,9 @@ Row(
           child: Row(
             children: [
               _buildPersonaSegment('Customer', 'customer', Icons.people, 
-                  isDisabled: true, isSmallScreen: isSmallScreen),
-              _buildPersonaSegment('Vendor', 'vendor', Icons.store, 
-                  isDisabled: true, isSmallScreen: isSmallScreen),
+                  isSmallScreen: isSmallScreen),
+              _buildPersonaSegment('Team', 'team', Icons.store, 
+                  isSmallScreen: isSmallScreen),
               _buildPersonaSegment('Sales', 'sales', Icons.business_center, 
                   isSmallScreen: isSmallScreen),
             ],
@@ -390,13 +391,13 @@ Row(
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          if (isDisabled) {
-            _showComingSoonDialog(title);
-          } else {
+          // if (isDisabled) {
+          //   _showComingSoonDialog(title);
+          // } else {
             setState(() {
               _selectedPersona = value;
             });
-          }
+          // }
         },
         child: Container(
           padding: EdgeInsets.symmetric(
@@ -516,41 +517,46 @@ Row(
     
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
-    
     setState(() {
       _isLoading = true;
-    });    try {      if (_selectedPersona == 'sales') {
-        // Use AuthService for sales persona
-        final authService = Provider.of<AuthService>(context, listen: false);
-        
-        // Save credentials if remember me is checked
-        await authService.saveLoginCredentials(username, password, _rememberMe);
-        
-        final result = await authService.login(username, password);
-        
-        if (result == 'first_login') {
-          // Navigate to first-time password change screen
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => FirstTimePasswordChangeScreen(
-                  username: username,
-                  currentPassword: password,
-                ),
-              ),
-            );
-          }
-        } else if (result == true) {
-          // Navigate to sales shell
-          if (mounted) {
-            Navigator.pushReplacementNamed(context, '/sales');
-          }
-        }
-      } else {
-        // For customer and vendor personas, use the original navigation
+    });
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      // Save credentials if remember me is checked
+      await authService.saveLoginCredentials(username, password, _rememberMe);
+      dynamic result;
+
+      // Pass persona to login
+      result = await authService.login(username, password, persona: _selectedPersona);
+
+      // Set global persona state after successful login
+      if ((result == true || result == 'first_login')) {
+        PersonaState.setPersona(_selectedPersona);
+      }
+
+      if (result == 'first_login') {
+        // Navigate to first-time password change screen
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/$_selectedPersona');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FirstTimePasswordChangeScreen(
+                username: username,
+                currentPassword: password,
+              ),
+            ),
+          );
+        }
+      } else if (result == true) {
+        // Navigate to the correct shell based on persona
+        if (mounted) {
+          if (_selectedPersona == 'sales') {
+            Navigator.pushReplacementNamed(context, '/sales');
+          } else if (_selectedPersona == 'team') {
+            Navigator.pushReplacementNamed(context, '/team');
+          } else if (_selectedPersona == 'customer') {
+            Navigator.pushReplacementNamed(context, '/customer');
+          }
         }
       }
     } catch (e) {
@@ -572,6 +578,7 @@ Row(
       MaterialPageRoute(
         builder: (context) => ForgotPasswordScreen(
           initialUserID: _usernameController.text.trim(),
+          persona: _selectedPersona,
         ),
       ),
     );

@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_colors.dart';
 
+
 class ForgotPasswordScreen extends StatefulWidget {
   final String initialUserID;
-  
+  final String persona;
+
   const ForgotPasswordScreen({
     super.key,
     this.initialUserID = '',
+    this.persona = 'sales',
   });
 
   @override
@@ -168,7 +171,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     final authService = Provider.of<AuthService>(context, listen: false);
     final result = await authService.forgotPassword(
-      _userIdController.text,      _phoneNumberController.text,
+      _userIdController.text,
+      _phoneNumberController.text,
+      persona: widget.persona,
     );
     
     if (result.success) {

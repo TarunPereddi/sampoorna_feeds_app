@@ -4,51 +4,59 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../models/customer.dart';
 
+
 // Define a class to hold pagination results
 class PaginationResult<T> {
-  final List<T> items;
-  final int totalCount;
-  
   PaginationResult({
     required this.items,
     required this.totalCount,
   });
+
+  final List<T> items;
+  final int totalCount;
 }
+
 
 class ApiService {
   static const String baseUrl = 'https://api.sampoornafeeds.in:7048/BC230/ODataV4';
-  static const String username = 'JobQueue';
-  static const String password = 'India@12good';
   static const String company = 'Sampoorna Feeds Pvt. Ltd';
-  // Create basic auth header
-  Map<String, String> get _headers {
-    String basicAuth = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
-    return {
-      'Authorization': basicAuth,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
+  static const String password = 'India@12good';
+  static const String username = 'JobQueue';
+
+  // POST with status code (for password reset, etc)
+  Future<Map<String, dynamic>> postWithStatus(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams}) async {
+    Map<String, String> params = {
+      'Company': company,
     };
-  }
-  // Helper method to handle network errors only
-  String _handleError(dynamic error) {
-    String errorString = error.toString();
-    
-    // Only handle network/internet connection related errors
-    if (errorString.contains('SocketException') || 
-        errorString.contains('NetworkException') ||
-        errorString.contains('Connection failed') ||
-        errorString.contains('No address associated with hostname') ||
-        errorString.contains('Connection refused') ||
-        errorString.contains('Connection timed out') ||
-        errorString.contains('Network is unreachable') ||
-        errorString.contains('TimeoutException') || 
-        errorString.contains('timeout')) {
-      return 'Could not connect to server. Please check your internet connection.';
+
+    if (queryParams != null) {
+      params.addAll(queryParams);
     }
-    
-    // For all other errors, return the original error message
-    return errorString;
-  }// Generic GET method for API calls
+
+    Uri uri = Uri.parse('$baseUrl/$endpoint').replace(queryParameters: params);
+    debugPrint('POST Request: $uri');
+    debugPrint('POST Body: $body');
+
+    try {
+      final response = await http.post(
+        uri,
+        headers: _headers,
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 30));
+
+      debugPrint('POST Response Status: ${response.statusCode}');
+      debugPrint('POST Response Body: ${response.body}');
+
+      final decoded = json.decode(response.body);
+      return {
+        'body': decoded,
+        'statusCode': response.statusCode,
+      };
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
   Future<dynamic> get(String endpoint, {Map<String, String>? queryParams}) async {
     Map<String, String> params = {
       'Company': company,
@@ -74,6 +82,7 @@ class ApiService {
       throw Exception(_handleError(e));
     }
   }  // For POST requests
+
   Future<dynamic> post(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams}) async {
     Map<String, String> params = {
       'Company': company,
@@ -230,10 +239,12 @@ class ApiService {
     final response = await get('ShiptoAddress', queryParams: queryParams);
     return response['value'];
   }
+
     // Create a new ship-to address
   Future<dynamic> createShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('ShiptoAddress', body: shipToData);
   }
+
   // Update an existing ship-to address
   Future<dynamic> updateShipToAddress(Map<String, dynamic> shipToData) async {
     return await post('API_ModifyShiptoCOde', body: shipToData);
@@ -284,7 +295,7 @@ class ApiService {
       return [];
     }
   }
-  
+
   // Get units of measurement for a specific item
   Future<List<dynamic>> getItemUnitsOfMeasure(String itemNo) async {
     if (itemNo.isEmpty) {
@@ -360,6 +371,7 @@ class ApiService {
       return null;
     }
   }
+
   // Get locations filtered by location codes
   Future<List<dynamic>> getLocations({List<String>? locationCodes}) async {
     Map<String, String>? queryParams;
@@ -389,6 +401,7 @@ class ApiService {
       return null;
     }
   }
+
   // Get items based on location with optional search
   Future<List<dynamic>> getItems({
     required String locationCode,
@@ -413,6 +426,7 @@ class ApiService {
     final response = await get('ItemList', queryParams: queryParams);
     return response['value'];
   }// Get sales orders with filtering and pagination
+
   Future<dynamic> getSalesOrders({
     String? searchQuery,
     String? searchFilter, // New parameter for direct filter string
@@ -493,7 +507,7 @@ class ApiService {
     final response = await get('SalesLine', queryParams: queryParams);
     return response['value'];
   }
-  
+
   /// Creates a sales order header and returns the order details
   Future<Map<String, dynamic>> createSalesOrder({
   required String customerNo,
@@ -535,6 +549,7 @@ class ApiService {
     throw Exception('Failed to create sales order: $e');
   }
 }  /// Adds a line item to an existing sales order
+
   Future<Map<String, dynamic>> addSalesOrderLine({
     required String documentNo,
     required String itemNo,
@@ -694,7 +709,6 @@ class ApiService {
     }
   }
 
-
   /// Re-opens a sales order to make it editable
 Future<Map<String, dynamic>> reopenSalesOrder(String orderNo) async {
   if (orderNo.isEmpty) {
@@ -763,6 +777,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       rethrow;
     }
   }
+
   // Get multiple customer details in a single request for efficiency
   Future<List<Map<String, dynamic>>> getMultipleCustomerDetails(List<String> customerNos) async {
     if (customerNos.isEmpty) {
@@ -784,6 +799,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       rethrow;
     }
   }
+
     // Get just customer emails in a single request for efficiency
   Future<List<Map<String, dynamic>>> getCustomerEmails(List<String> customerNos) async {
     if (customerNos.isEmpty) {
@@ -830,6 +846,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       rethrow;
     }
   }
+
   // Get vendor details method removed as not needed
 
   // Generic POST method for API calls
@@ -882,6 +899,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       throw Exception('Failed to get customer statement report: $e');
     }
   }
+
     // Get customer transactions history (ledger entries)
   Future<List<Map<String, dynamic>>> getCustomerTransactions(String customerNo, {String? salesPersonCode}) async {
     try {
@@ -910,6 +928,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       return [];
     }
   }
+
   // Get items with pagination support
   Future<PaginationResult<Map<String, dynamic>>> getItemsWithPagination({
     required String locationCode,
@@ -961,6 +980,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       totalCount: totalCount,
     );
   }
+
   // OTP Verification API
   Future<Map<String, dynamic>> verifyOTP({
     required String documentNo,
@@ -1008,8 +1028,10 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       rethrow;
     }
   }  // Get Sales Shipments for OTP verification
+
   Future<List<Map<String, dynamic>>> getSalesShipments({
     String? salespersonCode,
+    String? customerCode,
   }) async {
     const String endpoint = 'SalesShipment';
     
@@ -1031,6 +1053,11 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     if (salespersonCode != null && salespersonCode.isNotEmpty) {
       filters.add("SalespersonCode eq '$salespersonCode'");
     }
+
+    // Use CustomerCode for filtering (not Sell_to_Customer_No)
+    if (customerCode != null && customerCode.isNotEmpty) {
+      filters.add("CustomerCode eq '$customerCode'");
+    }
     
     // Combine filters with 'and'
     queryParams['\$filter'] = filters.join(' and ');
@@ -1049,4 +1076,35 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       rethrow;
     }
   }
+
+  // Create basic auth header
+  Map<String, String> get _headers {
+    String basicAuth = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+    return {
+      'Authorization': basicAuth,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+  }
+
+  // Helper method to handle network errors only
+  String _handleError(dynamic error) {
+    String errorString = error.toString();
+    
+    // Only handle network/internet connection related errors
+    if (errorString.contains('SocketException') || 
+        errorString.contains('NetworkException') ||
+        errorString.contains('Connection failed') ||
+        errorString.contains('No address associated with hostname') ||
+        errorString.contains('Connection refused') ||
+        errorString.contains('Connection timed out') ||
+        errorString.contains('Network is unreachable') ||
+        errorString.contains('TimeoutException') || 
+        errorString.contains('timeout')) {
+      return 'Could not connect to server. Please check your internet connection.';
+    }
+    
+    // For all other errors, return the original error message
+    return errorString;
+  }// Generic GET method for API calls
 }

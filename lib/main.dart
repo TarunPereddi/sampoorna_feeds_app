@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/customer/customer_shell.dart';
-import 'screens/vendor/vendor_shell.dart';
+import 'screens/team/team_shell.dart';
 import 'screens/sales/sales_shell.dart';
 import 'services/auth_service.dart';
 import 'providers/tab_refresh_provider.dart';
+import 'models/sales_person.dart';
+import 'models/customer.dart';
 
 void main() {
   runApp(const SampoornaFeedsApp());
@@ -38,7 +40,7 @@ class SampoornaFeedsApp extends StatelessWidget {
           '/': (context) => const AppInitializer(),
           '/login': (context) => const ExitWarningWrapper(child: LoginScreen()),
           '/customer': (context) => const ExitWarningWrapper(child: CustomerShell()),
-          '/vendor': (context) => const ExitWarningWrapper(child: VendorShell()),
+          '/team': (context) => const ExitWarningWrapper(child: TeamShell()),
           '/sales': (context) => const ExitWarningWrapper(child: SalesShell()),
         },
       ),
@@ -107,11 +109,19 @@ class _AppInitializerState extends State<AppInitializer> {
   Future<void> _checkSession() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     await authService.checkExistingSession();
-    
+
     if (mounted) {
       if (authService.isAuthenticated) {
-        // User is already logged in, navigate to sales shell
-        Navigator.of(context).pushReplacementNamed('/sales');
+        // Route based on persona
+        final user = authService.currentUser;
+        if (user is SalesPerson) {
+          Navigator.of(context).pushReplacementNamed('/sales');
+        } else if (user is Customer) {
+          Navigator.of(context).pushReplacementNamed('/customer');
+        } else {
+          // fallback to login if unknown type
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
       } else {
         // No existing session, go to login
         Navigator.of(context).pushReplacementNamed('/login');

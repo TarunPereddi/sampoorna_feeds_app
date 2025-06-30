@@ -12,26 +12,26 @@ import 'orders/edit_order_screen.dart';
 import '../../services/auth_service.dart';
 import '../../providers/tab_refresh_provider.dart';
 
-class SalesShell extends StatefulWidget {
+class TeamShell extends StatefulWidget {
   final int initialTabIndex;
 
-  const SalesShell({super.key, this.initialTabIndex = 0});
+  const TeamShell({super.key, this.initialTabIndex = 0});
   
   /// Static method to switch tabs from anywhere
   /// This can be used by NavigationService
   static void switchTab(BuildContext context, int tabIndex, {Map<String, dynamic>? arguments}) {
-    // Find the nearest SalesShell state and call its switchTab method
-    final state = context.findAncestorStateOfType<_SalesShellState>();
+    // Find the nearest TeamShell state and call its switchTab method
+    final state = context.findAncestorStateOfType<_TeamShellState>();
     if (state != null) {
       state.switchTab(tabIndex, arguments: arguments);
     }
   }
 
   @override
-  State<SalesShell> createState() => _SalesShellState();
+  State<TeamShell> createState() => _TeamShellState();
 }
 
-class _SalesShellState extends State<SalesShell> {
+class _TeamShellState extends State<TeamShell> {
   late int _selectedIndex;
     // Maintain separate navigation keys for each tab to enable
   // independent navigation stacks

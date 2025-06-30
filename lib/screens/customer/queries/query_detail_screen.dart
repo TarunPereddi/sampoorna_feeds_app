@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-class VendorQueryDetailScreen extends StatefulWidget {
+class QueryDetailScreen extends StatefulWidget {
   final String queryId;
 
-  const VendorQueryDetailScreen({
+  const QueryDetailScreen({
     super.key,
     required this.queryId,
   });
 
   @override
-  State<VendorQueryDetailScreen> createState() => _VendorQueryDetailScreenState();
+  State<QueryDetailScreen> createState() => _QueryDetailScreenState();
 }
 
-class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
+class _QueryDetailScreenState extends State<QueryDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
   bool _isLoading = false;
   late Map<String, dynamic> _queryDetails;
@@ -48,27 +49,15 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF008000),
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/app_logo.png',
-              height: 30,
-              width: 30,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Query Details',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ],
+        title: const Text(
+          'Query Details',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF2C5F2D),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
@@ -92,7 +81,7 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
           ),
 
           // Message input
-          if (_queryDetails['status'] == 'Active')
+          if (_queryDetails['status'] != 'Resolved')
             _buildMessageInput(),
         ],
       ),
@@ -105,7 +94,7 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -119,40 +108,75 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
         children: [
           Row(
             children: [
-              Text(
-                _queryDetails['subject'],
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              // Customer Avatar
+              CircleAvatar(
+                backgroundColor: const Color(0xFF2C5F2D).withOpacity(0.2),
+                radius: 20,
+                child: Text(
+                  _queryDetails['customerName'].substring(0, 1),
+                  style: const TextStyle(
+                    color: Color(0xFF2C5F2D),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
+
+              // Customer Name and Query ID
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _queryDetails['customerName'],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      widget.queryId,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Status Chip
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: priorityColor,
+                  color: _getStatusColor(_queryDetails['status']).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _getStatusColor(_queryDetails['status']), width: 1),
                 ),
                 child: Text(
-                  _queryDetails['priority'],
-                  style: const TextStyle(
-                    color: Colors.white,
+                  _queryDetails['status'],
+                  style: TextStyle(
+                    color: _getStatusColor(_queryDetails['status']),
+                    fontWeight: FontWeight.bold,
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+
+          // Query Subject
           Text(
-            _queryDetails['description'],
-            style: TextStyle(
-              color: Colors.grey.shade800,
-              fontSize: 14,
+            _queryDetails['subject'],
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
           ),
           const SizedBox(height: 8),
+
+          // Query Metadata
           Row(
             children: [
               Icon(
@@ -168,18 +192,20 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
                   color: Colors.grey.shade600,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _queryDetails['status'] == 'Active' ? Colors.green : Colors.grey,
+                  color: priorityColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: priorityColor, width: 1),
                 ),
                 child: Text(
-                  _queryDetails['status'],
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
+                  _queryDetails['priority'],
+                  style: TextStyle(
+                    color: priorityColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
                   ),
                 ),
               ),
@@ -197,28 +223,28 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
       reverse: true,
       itemBuilder: (context, index) {
         final message = _messages[index];
-        final bool isFromMe = message['sender'] == 'vendor';
+        final bool isFromCustomer = message['sender'] == 'customer';
 
-        return _buildMessageBubble(message, isFromMe);
+        return _buildMessageBubble(message, isFromCustomer);
       },
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message, bool isFromMe) {
+  Widget _buildMessageBubble(Map<String, dynamic> message, bool isFromCustomer) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        mainAxisAlignment: isFromMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isFromCustomer ? MainAxisAlignment.start : MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isFromMe)
+          if (isFromCustomer)
             CircleAvatar(
               radius: 16,
-              backgroundColor: Colors.blue.shade700,
-              child: const Text(
-                'S',
+              backgroundColor: Colors.grey.shade200,
+              child: Text(
+                _queryDetails['customerName'].substring(0, 1),
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -228,7 +254,7 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isFromMe ? const Color(0xFFE8F5E9) : Colors.grey.shade100,
+                color: isFromCustomer ? Colors.grey.shade100 : const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -239,24 +265,38 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
                     style: const TextStyle(fontSize: 14),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    message['time'],
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        message['time'],
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      if (!isFromCustomer && message['status'] == 'seen')
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(
+                            Icons.done_all,
+                            size: 12,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(width: 8),
-          if (isFromMe)
+          if (!isFromCustomer)
             CircleAvatar(
               radius: 16,
-              backgroundColor: Colors.green,
+              backgroundColor: const Color(0xFF2C5F2D),
               child: const Text(
-                'V',
+                'S',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -329,8 +369,9 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
       _messages.insert(0, {
         'id': 'msg-${_messages.length + 1}',
         'text': messageText,
-        'sender': 'vendor',
-        'time': '${DateTime.now().hour}:${DateTime.now().minute}',
+        'sender': 'sales',
+        'time': DateFormat('HH:mm').format(DateTime.now()),
+        'status': 'sent',
       });
       _messageController.clear();
     });
@@ -343,7 +384,7 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_queryDetails['status'] == 'Active')
+            if (_queryDetails['status'] != 'Resolved')
               ListTile(
                 leading: const Icon(Icons.check_circle),
                 title: const Text('Mark as Resolved'),
@@ -352,14 +393,6 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
                   _markAsResolved();
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.refresh),
-              title: const Text('Refresh'),
-              onTap: () {
-                Navigator.pop(context);
-                _loadQueryDetails();
-              },
-            ),
             if (_queryDetails['status'] == 'Resolved')
               ListTile(
                 leading: const Icon(Icons.refresh),
@@ -369,6 +402,22 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
                   _reopenQuery();
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.person_add),
+              title: const Text('Assign to Another Agent'),
+              onTap: () {
+                Navigator.pop(context);
+                // Show assignment dialog
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.note_add),
+              title: const Text('Add Internal Note'),
+              onTap: () {
+                Navigator.pop(context);
+                // Show internal note dialog
+              },
+            ),
           ],
         ),
       ),
@@ -390,7 +439,7 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
 
   void _reopenQuery() {
     setState(() {
-      _queryDetails['status'] = 'Active';
+      _queryDetails['status'] = 'In Progress';
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -414,105 +463,96 @@ class _VendorQueryDetailScreenState extends State<VendorQueryDetailScreen> {
     }
   }
 
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'New':
+        return Colors.orange;
+      case 'In Progress':
+        return Colors.blue;
+      case 'Resolved':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Map<String, dynamic> _getMockQueryDetails() {
-    if (widget.queryId == 'QRY-001') {
+    // Return mock data based on the query ID
+    if (widget.queryId == 'QRY-2025-001') {
       return {
-        'id': 'QRY-001',
-        'subject': 'Payment schedule clarification',
-        'description': 'Need to discuss the payment schedule for the recent order PO-1234. The terms seem to be different from our previous agreement. Can we arrange a call to discuss this?',
-        'date': '15 Apr 2025',
+        'id': 'QRY-2025-001',
+        'customerName': 'B.K. Enterprises',
+        'subject': 'Delivery schedule change request',
+        'date': '14/04/2025',
+        'priority': 'High',
+        'status': 'New',
+      };
+    } else if (widget.queryId == 'QRY-2025-002') {
+      return {
+        'id': 'QRY-2025-002',
+        'customerName': 'Prajjawal Enterprises',
+        'subject': 'Product quality concern',
+        'date': '13/04/2025',
         'priority': 'Medium',
-        'status': 'Active',
-      };
-    } else if (widget.queryId == 'QRY-002') {
-      return {
-        'id': 'QRY-002',
-        'subject': 'Delivery address update',
-        'description': 'I need to update the delivery address for my next shipment. The new warehouse location is now operational. Please confirm when this change can be reflected in your system.',
-        'date': '12 Apr 2025',
-        'priority': 'High',
-        'status': 'Active',
-      };
-    } else if (widget.queryId == 'QRY-003') {
-      return {
-        'id': 'QRY-003',
-        'subject': 'Invoice discrepancy',
-        'description': 'There was a discrepancy in the invoice amount for order PO-1220. The billed amount is higher than what was agreed upon. Please check and provide clarification.',
-        'date': '28 Mar 2025',
-        'priority': 'High',
-        'status': 'Resolved',
+        'status': 'In Progress',
       };
     } else {
+      // Default mock data for any other query ID
       return {
         'id': widget.queryId,
-        'subject': 'Generic query',
-        'description': 'This is a generic query description.',
-        'date': '10 Apr 2025',
+        'customerName': 'Customer',
+        'subject': 'Query Subject',
+        'date': '10/04/2025',
         'priority': 'Medium',
-        'status': 'Active',
+        'status': 'New',
       };
     }
   }
 
   List<Map<String, dynamic>> _getMockMessages() {
-    if (widget.queryId == 'QRY-001') {
+    if (widget.queryId == 'QRY-2025-001') {
       return [
         {
-          'id': 'msg-3',
-          'text': 'Thank you for your quick response. I will review the schedule and get back to you.',
-          'sender': 'vendor',
+          'id': 'msg-1',
+          'text': 'We need to reschedule our delivery for order #ORD-2025-001 from 18th April to 20th April due to a facility maintenance on the original date. Please let us know if this is possible.',
+          'sender': 'customer',
           'time': '10:15',
-        },
-        {
-          'id': 'msg-2',
-          'text': 'The updated payment schedule has been shared via email. Please check and confirm if it aligns with your requirements.',
-          'sender': 'sampoorna',
-          'time': '10:10',
-        },
-        {
-          'id': 'msg-1',
-          'text': 'Hello, I wanted to clarify the payment schedule for order PO-1234. The current terms seem different from our previous agreement.',
-          'sender': 'vendor',
-          'time': '09:45',
+          'status': 'seen',
         },
       ];
-    } else if (widget.queryId == 'QRY-002') {
-      return [
-        {
-          'id': 'msg-1',
-          'text': 'Hello, I need to update the delivery address for my next shipment. Our new warehouse location is now operational.',
-          'sender': 'vendor',
-          'time': '14:30',
-        },
-      ];
-    } else if (widget.queryId == 'QRY-003') {
+    } else if (widget.queryId == 'QRY-2025-002') {
       return [
       {
         'id': 'msg-3',
-    'text': 'Thank you for the clarification. I understand the issue now. Consider this matter resolved.',
-    'sender': 'vendor',
-    'time': '11:45',
-  },
+    'text': 'Thank you for the quick response. Well collect the samples as suggested for testing.',
+    'sender': 'customer',
+    'time': '14:30',
+    'status': 'seen',
+    },
     {
     'id': 'msg-2',
-    'text': 'We have checked the invoice and found that there was an error in the calculation. A corrected invoice has been issued and sent to your email. Please let us know if you need anything else.',
-    'sender': 'sampoorna',
-    'time': '11:30',
+    'text': 'I understand your concern. Can you provide more details about the inconsistencies youve noticed? If possible, could you also share some photos? We can arrange for a sample to be tested from your current stock.',
+    'sender': 'sales',
+    'time': '14:22',
+    'status': 'seen',
     },
     {
     'id': 'msg-1',
-    'text': 'There seems to be a discrepancy in the invoice amount for order PO-1220. The billed amount is higher than what was agreed upon.',
-    'sender': 'vendor',
-    'time': '10:15',
+    'text': 'The recent delivery of chicken feed had some inconsistencies in texture and color compared to our previous orders. Some bags appear darker and the texture seems coarser than usual.',
+    'sender': 'customer',
+    'time': '13:45',
+    'status': 'seen',
     },
     ];
     } else {
+    // Default mock messages for any other query ID
     return [
     {
     'id': 'msg-1',
-    'text': 'This is a generic message for testing purposes.',
-    'sender': 'vendor',
+    'text': 'This is a sample message for this query. Please review and respond.',
+    'sender': 'customer',
     'time': '12:00',
+    'status': 'seen',
     },
     ];
     }
