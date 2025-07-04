@@ -339,7 +339,7 @@ class AuthService extends ChangeNotifier {
           'registredModileNo': mobileNumber,
         };
       } else {
-        endpoint = 'API_ForgetPassword';
+        endpoint = 'API_ForgetPasswordForWebUser';
         body = {
           'userID': userId,
           'registredModileNo': mobileNumber,

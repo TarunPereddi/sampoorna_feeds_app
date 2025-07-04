@@ -1341,12 +1341,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     final date = dateFormatter.format(now);
     final time = timeFormatter.format(now);
     
-    final customerName = _customerDetails['Name']?.toString().replaceAll(' ', '_') ?? 'Customer';
-    
     if (reportType == 'invoice') {
-      return 'Invoice_${customerName}_${widget.customerNo}_${date}_${time}.pdf';
+      return 'Invoice_${widget.customerNo}_${widget.customerNo}_${date}_${time}.pdf';
     } else {
-      return 'Statement_${customerName}_${widget.customerNo}_${date}_${time}.pdf';
+      return 'Statement_${widget.customerNo}_${widget.customerNo}_${date}_${time}.pdf';
     }
   }
 

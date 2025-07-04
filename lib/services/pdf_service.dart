@@ -653,13 +653,12 @@ class PdfService {  static Future<bool> generateAndSharePdf({
     }
   }
 
-  static String generateUniqueFileName(String type, String customerName, String customerNo) {
+  static String generateUniqueFileName(String type, String customerId, String customerNo) {
     final now = DateTime.now();
     final date = DateFormat('yyyyMMdd').format(now);
     final time = DateFormat('HHmmss').format(now);
-    final safeCustomerName = customerName.replaceAll(' ', '_');
     
-    return '${type.capitalize()}_${safeCustomerName}_${customerNo}_${date}_${time}.pdf';
+    return '${type.capitalize()}_${customerId}_${customerNo}_${date}_${time}.pdf';
   }
 
   // Enhanced method for cross-platform PDF saving with user-friendly messaging
