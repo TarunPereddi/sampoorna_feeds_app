@@ -510,45 +510,49 @@ class ApiService {
 
   /// Creates a sales order header and returns the order details
   Future<Map<String, dynamic>> createSalesOrder({
-  required String customerNo,
-  required String shipToCode,
-  required String locationCode,
-  required String salesPersonCode,
-  DateTime? requestedDeliveryDate, // Optional parameter
-}) async {
-  // Create request body
-  Map<String, dynamic> body = {
-    "Sell_to_Customer_No": customerNo,
-    "Ship_to_Code": shipToCode,
-    "Salesperson_Code": salesPersonCode,
-    "Location_Code": locationCode,
-    "Invoice_Type": "Bill of Supply",
-    "created_from_web": true
-  };
+    required String customerNo,
+    required String shipToCode,
+    required String locationCode,
+    DateTime? requestedDeliveryDate, // Optional parameter
+    String? salesPersonCode, // Now optional
+  }) async {
+    // Create request body
+    Map<String, dynamic> body = {
+      "Sell_to_Customer_No": customerNo,
+      "Ship_to_Code": shipToCode,
+      "Location_Code": locationCode,
+      "Invoice_Type": "Bill of Supply",
+      "created_from_web": true
+    };
     // Format date as expected by API (yyyy-MM-dd)
-  // Use provided date or default to tomorrow
-  DateTime deliveryDate = requestedDeliveryDate ?? DateTime.now().add(const Duration(days: 1));
-  String formattedDate = DateFormat('yyyy-MM-dd').format(deliveryDate);
-  body["Requested_Delivery_Date"] = formattedDate;
-  
-  debugPrint('Creating sales order: $body');
-  
-  try {
-    final response = await post('SalesOrder', body: body);
-    
-    // Log the response for debugging
-    debugPrint('Sales Order Creation Response: $response');
-    
-    if (response != null) {
-      return response;
-    } else {
-      throw Exception('Empty response received when creating sales order');
+    // Use provided date or default to tomorrow
+    DateTime deliveryDate = requestedDeliveryDate ?? DateTime.now().add(const Duration(days: 1));
+    String formattedDate = DateFormat('yyyy-MM-dd').format(deliveryDate);
+    body["Requested_Delivery_Date"] = formattedDate;
+
+    // Only include salesPersonCode if provided (for non-customer personas)
+    if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
+      body["SalesPerson_Code"] = salesPersonCode;
     }
-  } catch (e) {
-    debugPrint('Error creating sales order: $e');
-    throw Exception('Failed to create sales order: $e');
-  }
-}  /// Adds a line item to an existing sales order
+
+    debugPrint('Creating sales order: $body');
+
+    try {
+      final response = await post('SalesOrder', body: body);
+
+      // Log the response for debugging
+      debugPrint('Sales Order Creation Response: $response');
+
+      if (response != null) {
+        return response;
+      } else {
+        throw Exception('Empty response received when creating sales order');
+      }
+    } catch (e) {
+      debugPrint('Error creating sales order: $e');
+      throw Exception('Failed to create sales order: $e');
+    }
+  }  /// Adds a line item to an existing sales order
 
   Future<Map<String, dynamic>> addSalesOrderLine({
     required String documentNo,

@@ -62,10 +62,10 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
         widget.onUpdate('saleCode', saleCode);
         _fetchShipToAddresses(customer.no);
 
-        // Parse location codes from customer.Location_Code (comma-separated string)
+        // Parse location codes from customer.Customer_Location (comma-separated string)
         List<String> locationCodes = [];
-        if (customer.locationCode != null && customer.locationCode is String && customer.locationCode.toString().trim().isNotEmpty) {
-          locationCodes = customer.locationCode.toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        if (customer.customerLocation != null && customer.customerLocation is String && customer.customerLocation.toString().trim().isNotEmpty) {
+          locationCodes = customer.customerLocation.toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
         }
         // Store in orderData for later use if needed
         widget.onUpdate('locationCodes', locationCodes);

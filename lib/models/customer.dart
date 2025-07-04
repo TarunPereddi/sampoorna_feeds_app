@@ -9,6 +9,7 @@ class Customer {
   final String? gstNo;
   final String? panNo;  final String? customerPriceGroup; // Add this field
   final double balanceLcy;
+  final String? customerLocation; // Add customerLocation field
   final String? blocked; // Add blocked field
 
   Customer({
@@ -23,6 +24,7 @@ class Customer {
     this.panNo,
     this.customerPriceGroup, // Add to constructor
     this.balanceLcy = 0,
+    this.customerLocation,
     this.blocked, // Add to constructor
   });
 
@@ -43,6 +45,7 @@ class Customer {
           : json['Balance_LCY'] as double) 
         : 0,
       blocked: json['Blocked'] as String?, // Add blocked field from JSON
+      customerLocation: json['Customer_Location'] as String?, // Add customerLocation field from JSON
     );
   }
 
