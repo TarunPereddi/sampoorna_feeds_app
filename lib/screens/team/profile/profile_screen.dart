@@ -826,15 +826,20 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
       setState(() => isLoading = true);
 
       try {
-        final result = await widget.apiService.resetPassword(
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final result = await authService.resetPassword(
           userId: widget.salesPerson['Code'] ?? '',
           oldPassword: oldPasswordController.text.trim(),
           newPassword: newPasswordController.text.trim(),
+          persona: 'team',
         );
 
         if (!mounted) return;
         Navigator.pop(context);
-        widget.onSuccess(result);
+        widget.onSuccess({
+          'success': result.success,
+          'message': result.message,
+        });
       } catch (e) {
         setState(() => isLoading = false);
         if (!mounted) return;

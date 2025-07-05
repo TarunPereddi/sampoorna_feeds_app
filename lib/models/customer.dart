@@ -11,6 +11,7 @@ class Customer {
   final double balanceLcy;
   final String? customerLocation; // Add customerLocation field
   final String? blocked; // Add blocked field
+  final String? responsibilityCenter; // Add responsibility center field
 
   Customer({
     required this.no,
@@ -26,6 +27,7 @@ class Customer {
     this.balanceLcy = 0,
     this.customerLocation,
     this.blocked, // Add to constructor
+    this.responsibilityCenter, // Add to constructor
   });
 
   factory Customer.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class Customer {
         : 0,
       blocked: json['Blocked'] as String?, // Add blocked field from JSON
       customerLocation: json['Customer_Location'] as String?, // Add customerLocation field from JSON
+      responsibilityCenter: json['Responsibility_Center'] as String?, // Add responsibility center field from JSON
     );
   }
 

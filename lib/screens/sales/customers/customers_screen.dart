@@ -405,13 +405,52 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,                      children: [
-                        Text(
-                          'ID: ${customer.no}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'ID: ${customer.no}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (customer.responsibilityCenter != null && customer.responsibilityCenter!.isNotEmpty) ...[
+                              Text(
+                                ' - ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isBlocked ? Colors.red.shade600 : Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: isBlocked 
+                                      ? Colors.red.shade100 
+                                      : const Color(0xFF2C5F2D).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(3),
+                                  border: Border.all(
+                                    color: isBlocked 
+                                        ? Colors.red.shade300 
+                                        : const Color(0xFF2C5F2D).withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  customer.responsibilityCenter!,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: isBlocked 
+                                        ? Colors.red.shade700 
+                                        : const Color(0xFF2C5F2D),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -422,7 +461,8 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                             color: isBlocked ? Colors.red.shade800 : Colors.black87,
                           ),
                           maxLines: 2,
-                          overflow: TextOverflow.ellipsis,                        ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         if (customer.balanceLcy != 0) ...[
                           const SizedBox(height: 2),
                           Text(

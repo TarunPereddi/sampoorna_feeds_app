@@ -543,6 +543,7 @@ Row(
               builder: (context) => FirstTimePasswordChangeScreen(
                 username: username,
                 currentPassword: password,
+                persona: _selectedPersona,
               ),
             ),
           );

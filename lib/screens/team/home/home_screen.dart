@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       // Load all data in parallel
       await Future.wait([
-        _loadRecentOrders(salesPerson.name),
+        _loadRecentOrders(salesPerson.code),
         _loadDashboardMetrics(salesPerson.code, salesPerson.name),
       ]);
 

@@ -9,17 +9,21 @@ import 'item_selection_screen.dart';
 class OrderItemFormWidget extends StatefulWidget {
   final bool isSmallScreen;
   final Function(Map<String, dynamic>) onAddItem;
+  final VoidCallback? onCancelEdit;
   final String? locationCode;
-  final String? customerPriceGroup; // Add this parameter
+  final String? customerPriceGroup;
   final bool isEditMode;
+  final Map<String, dynamic>? editingItemData;
 
   const OrderItemFormWidget({
     super.key,
     required this.isSmallScreen,
     required this.onAddItem,
+    this.onCancelEdit,
     required this.locationCode,
     required this.customerPriceGroup,
     this.isEditMode = false,
+    this.editingItemData,
   });
 
   @override
@@ -53,7 +57,12 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
   bool _isLoadingPrice = false;
   
   // Control flags to prevent stack overflow
-  bool _isUomDialogOpen = false;// Fallback units of measure for when API doesn't return any units
+  bool _isUomDialogOpen = false;
+
+  // Add getter to check if we're in editing mode
+  bool get _isItemEditing => widget.isEditMode && widget.editingItemData != null;
+
+  // Fallback units of measure for when API doesn't return any units
   final List<String> _fallbackUnitsOfMeasure = [
     'Bag',
     'Kg',
@@ -96,15 +105,27 @@ class _OrderItemFormWidgetState extends State<OrderItemFormWidget> {
         _searchItems(_itemSearchController.text, widget.locationCode!);
       }
     });
+
+    // Initialize with editing data if provided
+    if (widget.editingItemData != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _populateEditingData(widget.editingItemData!);
+      });
+    }
   }
 
   @override
 void didUpdateWidget(OrderItemFormWidget oldWidget) {
   super.didUpdateWidget(oldWidget);
   
+  // Check if we're entering edit mode with new item data
+  if (widget.editingItemData != oldWidget.editingItemData && widget.editingItemData != null) {
+    _populateEditingData(widget.editingItemData!);
+  }
+  
   // Reset form if location changed
   if (widget.locationCode != oldWidget.locationCode) {
-    _resetItemForm(); // Add this line to reset the form
+    _resetItemForm();
     
     // Fetch items if location changed and not empty
     if (widget.locationCode != null && widget.locationCode!.isNotEmpty) {
@@ -328,22 +349,63 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
     debugPrint('Calculated total: $_totalAmount from quantity: $_quantity and price: $_price');
   }
 
+  // Method to populate form with editing item data
+  void _populateEditingData(Map<String, dynamic> itemData) {
+    setState(() {
+      // Set the selected item from the editing data
+      final itemNo = itemData['itemNo'] as String?;
+      final itemDescription = itemData['itemDescription'] as String?;
+      final unitPrice = itemData['price'] as double? ?? 0.0;
+      
+      if (itemNo != null && itemDescription != null) {
+        _selectedItem = Item(
+          no: itemNo,
+          description: itemDescription,
+          unitPrice: unitPrice,
+          salesUnitOfMeasure: itemData['unitOfMeasure'] as String?,
+        );
+      }
+      
+      // Set quantity and other values
+      _quantity = itemData['quantity'] as double? ?? 0.0;
+      _price = itemData['price'] as double? ?? 0.0;
+      _mrp = itemData['mrp'] as double? ?? 0.0;
+      _totalAmount = itemData['totalAmount'] as double? ?? 0.0;
+      _selectedUnitOfMeasure = itemData['unitOfMeasure'] as String?;
+      
+      // Update controllers
+      _quantityController.text = _quantity.toString();
+      _priceController.text = _price.toString();
+      _mrpController.text = _mrp.toString();
+      _totalAmountController.text = _totalAmount.toString();
+      _itemSearchController.text = _selectedItem != null 
+          ? '${_selectedItem!.no} - ${_selectedItem!.description}'
+          : '';
+    });
+    
+    // Fetch units for the item if we have an item
+    if (_selectedItem != null) {
+      _fetchUnitsOfMeasure(_selectedItem!.no);
+    }
+  }
+
   // Reset the item form
   void _resetItemForm() {
     setState(() {
       _selectedItem = null;
       _selectedUnitOfMeasure = null;
-      _quantityController.text = '';
+      _itemUnitsOfMeasure.clear();
+      _quantityController.clear();
       _mrpController.text = '0.0';
       _priceController.text = '0.0';
       _totalAmountController.text = '0.0';
+      _itemSearchController.clear();
       _quantity = 0;
       _mrp = 0;
       _price = 0;
       _totalAmount = 0;
-      _itemSearchController.clear();
     });
-  }  // Add the current item to the order
+  }  // Add/Update the current item to the order
   void _addItemToOrder() {
     if (!_itemFormKey.currentState!.validate()) {
       return;
@@ -367,7 +429,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       return;
     }
 
-    final Map<String, dynamic> newItem = {
+    final Map<String, dynamic> itemData = {
       'itemNo': _selectedItem!.no,
       'itemDescription': _selectedItem!.description,
       'unitOfMeasure': _selectedUnitOfMeasure!,
@@ -377,8 +439,20 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
       'totalAmount': _totalAmount,
     };
 
-    widget.onAddItem(newItem);
-    _resetItemForm();
+    // If editing, preserve the lineNo
+    if (_isItemEditing && widget.editingItemData != null) {
+      itemData['lineNo'] = widget.editingItemData!['lineNo'];
+      itemData['cannotDelete'] = widget.editingItemData!['cannotDelete'];
+    }
+
+    widget.onAddItem(itemData);
+    
+    // Reset form after add/update
+    if (_isItemEditing) {
+      _resetAfterEdit();
+    } else {
+      _resetItemForm();
+    }
   }
 
   // Fetch sales price based on customer price group, location, and UOM
@@ -568,9 +642,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             children: [              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Add Items',
-                    style: TextStyle(
+                  Text(
+                    _isItemEditing ? 'Edit Item' : 'Add Items',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -622,25 +696,67 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
 
               const SizedBox(height: 16),
 
-              // Add Button
+              // Add/Update Button
               if (widget.locationCode != null && widget.locationCode!.isNotEmpty &&
                 widget.customerPriceGroup != null && widget.customerPriceGroup!.isNotEmpty  ||
                   widget.isEditMode)
-              Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: _addItemToOrder,                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('ADD ITEM', style: TextStyle(fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2196F3),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              _isItemEditing
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Cancel button
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            // Reset the form first
+                            _resetItemForm();
+                            // Then call the parent cancel callback
+                            if (widget.onCancelEdit != null) {
+                              widget.onCancelEdit!();
+                            }
+                          },
+                          icon: const Icon(Icons.cancel, size: 16),
+                          label: const Text('CANCEL', style: TextStyle(fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey.shade600,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                        // Update button
+                        ElevatedButton.icon(
+                          onPressed: _addItemToOrder,
+                          icon: const Icon(Icons.update, size: 16),
+                          label: const Text('UPDATE', style: TextStyle(fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: _addItemToOrder,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('ADD ITEM', style: TextStyle(fontSize: 13)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2196F3),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -1055,7 +1171,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         ),
         const SizedBox(height: 6),
         GestureDetector(
-          onTap: () async {
+          onTap: _isItemEditing ? null : () async {
             if (widget.locationCode == null || widget.locationCode!.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please select a location first')),
@@ -1079,13 +1195,14 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
               // Update the search controller for future reference
               _itemSearchController.text = selectedItem.description;
             }
-          },          child: Container(
+          },
+          child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: _isItemEditing ? Colors.grey.shade400 : Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
+              color: _isItemEditing ? Colors.grey.shade100 : Colors.white,
             ),
             child: Row(
               children: [
@@ -1112,5 +1229,10 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         ),
       ],
     );
+  }
+
+  // Reset form after editing
+  void _resetAfterEdit() {
+    _resetItemForm();
   }
 }

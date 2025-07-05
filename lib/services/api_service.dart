@@ -23,6 +23,20 @@ class ApiService {
   static const String password = 'India@12good';
   static const String username = 'JobQueue';
 
+  // Helper method to create filter for multiple sales person codes
+  String _createSalesPersonCodeFilter(String salesPersonCodes, String fieldName) {
+    if (salesPersonCodes.isEmpty) return '';
+    
+    final codes = salesPersonCodes.split(',').map((code) => code.trim()).where((code) => code.isNotEmpty).toList();
+    if (codes.isEmpty) return '';
+    
+    if (codes.length == 1) {
+      return "$fieldName eq '${codes[0]}'";
+    } else {
+      return codes.map((code) => "$fieldName eq '$code'").join(' or ');
+    }
+  }
+
   // POST with status code (for password reset, etc)
   Future<Map<String, dynamic>> postWithStatus(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams}) async {
     Map<String, String> params = {
@@ -128,7 +142,7 @@ class ApiService {
   }) async {
     try {
       final response = await post(
-        'API_ResetPassword',
+        'API_ResetPasswordWebuser',
         body: {
           'userID': userId,
           'oldPassword': oldPassword,
@@ -142,6 +156,57 @@ class ApiService {
       };
     } catch (e) {
       debugPrint('Error resetting password: $e');
+      
+      // Extract only the meaningful part of the error message
+      String errorMessage = 'Password reset failed';
+      
+      final errorString = e.toString();
+      if (errorString.contains('"message"')) {
+        try {
+          final messageRegex = RegExp(r'"message"\s*:\s*"([^"]+)"');
+          final match = messageRegex.firstMatch(errorString);
+          if (match != null && match.groupCount >= 1) {
+            String message = match.group(1)!;
+            // Remove CorrelationId and everything after it
+            if (message.contains('CorrelationId')) {
+              message = message.split('CorrelationId')[0].trim();
+            }
+            errorMessage = message;
+          }
+        } catch (_) {
+          // If parsing fails, use default message
+        }
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  // Reset password for customer persona
+  Future<Map<String, dynamic>> resetPasswordCustomer({
+    required String userId,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await post(
+        'API_ResetPasswordCustomer',
+        body: {
+          'userID': userId,
+          'oldPassword': oldPassword,
+          'newPassword': newPassword,
+        },
+      );
+      
+      return {
+        'success': true,
+        'message': response['value'] ?? 'Password reset successfully',
+      };
+    } catch (e) {
+      debugPrint('Error resetting customer password: $e');
       
       // Extract only the meaningful part of the error message
       String errorMessage = 'Password reset failed';
@@ -201,7 +266,10 @@ class ApiService {
     
     // Add sales person filter if provided
     if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
-      filters.add("Salesperson_Code eq '$salesPersonCode'");
+      final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, 'Salesperson_Code');
+      if (codeFilter.isNotEmpty) {
+        filters.add("($codeFilter)");
+      }
     }
 
     // Add search filter if provided
@@ -514,7 +582,7 @@ class ApiService {
     required String shipToCode,
     required String locationCode,
     DateTime? requestedDeliveryDate, // Optional parameter
-    String? salesPersonCode, // Now optional
+    String? salesPersonCode, // Original username/user ID for SalesPerson_Code
   }) async {
     // Create request body
     Map<String, dynamic> body = {
@@ -532,6 +600,7 @@ class ApiService {
 
     // Only include salesPersonCode if provided (for non-customer personas)
     if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
+      // Use the original username as SalesPerson_Code (not the multiple codes)
       body["SalesPerson_Code"] = salesPersonCode;
     }
 
@@ -608,7 +677,10 @@ class ApiService {
     List<String> filters = [];
     
     // Add sales person filter
-    filters.add("Salesperson_Code eq '$salesPersonCode'");
+    final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, 'Salesperson_Code');
+    if (codeFilter.isNotEmpty) {
+      filters.add("($codeFilter)");
+    }
     
     // Add search filter if provided
     if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -831,10 +903,13 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
   // Get sales person details by code
   Future<Map<String, dynamic>> getSalesPersonDetails(String code) async {
     try {
+      // If multiple codes, use the first one for profile details
+      final firstCode = code.split(',').first.trim();
+      
       final response = await get(
         'SalesPerson',
         queryParams: {
-          '\$filter': "Code eq '$code'",
+          '\$filter': "Code eq '$firstCode'",
         },
       );
       
@@ -911,7 +986,10 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
       
       // Add salesperson filter if provided
       if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
-        filter += " and Salesperson_Code eq '$salesPersonCode'";
+        final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, 'Salesperson_Code');
+        if (codeFilter.isNotEmpty) {
+          filter += " and ($codeFilter)";
+        }
       }
       
       final queryParams = {
@@ -1055,7 +1133,10 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     
     // Add filter for salesperson if provided
     if (salespersonCode != null && salespersonCode.isNotEmpty) {
-      filters.add("SalespersonCode eq '$salespersonCode'");
+      final codeFilter = _createSalesPersonCodeFilter(salespersonCode, 'SalespersonCode');
+      if (codeFilter.isNotEmpty) {
+        filters.add("($codeFilter)");
+      }
     }
 
     // Use CustomerCode for filtering (not Sell_to_Customer_No)
@@ -1078,6 +1159,166 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     } catch (e) {
       debugPrint('Error fetching sales shipments: $e');
       rethrow;
+    }
+  }
+
+  // Generate QR code for customer payment
+  Future<String> generatePaymentQRCode(String customerNo) async {
+    const String endpoint = 'API_GeneratePaymentQRCOdeforCustomer';
+    
+    Map<String, String> params = {
+      'Company': company,
+    };
+
+    Uri uri = Uri.parse('$baseUrl/$endpoint').replace(queryParameters: params);
+    
+    final body = {
+      'no': customerNo,
+    };
+
+    debugPrint('POST Request (QR Code): $uri');
+    debugPrint('Body: ${jsonEncode(body)}');
+
+    try {
+      final response = await http.post(
+        uri,
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+
+      debugPrint('Response Status Code: ${response.statusCode}');
+      debugPrint('Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['value'] != null) {
+          return data['value'] as String;
+        } else {
+          throw Exception('QR code data not found in response');
+        }
+      } else {
+        throw Exception('Failed to generate QR code: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error generating QR code: $e');
+      throw Exception(_handleError(e));
+    }
+  }
+
+  // PATCH method for updating existing resources
+  Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams, Map<String, String>? additionalHeaders}) async {
+    Map<String, String> params = {
+      'Company': company,
+    };
+
+    if (queryParams != null) {
+      params.addAll(queryParams);
+    }
+
+    Uri uri = Uri.parse('$baseUrl/$endpoint').replace(queryParameters: params);
+    debugPrint('PATCH Request: $uri');
+    debugPrint('PATCH Body: $body');
+
+    // Merge default headers with additional headers
+    Map<String, String> headers = Map.from(_headers);
+    if (additionalHeaders != null) {
+      headers.addAll(additionalHeaders);
+    }
+
+    try {
+      final response = await http.patch(
+        uri,
+        headers: headers,
+        body: body != null ? json.encode(body) : null,
+      ).timeout(const Duration(seconds: 30));
+
+      debugPrint('PATCH Response Status: ${response.statusCode}');
+      debugPrint('PATCH Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return response.body.isNotEmpty ? json.decode(response.body) : {};
+      } else {
+        throw Exception('PATCH request failed: ${response.statusCode}\n${response.body}');
+      }
+    } catch (e) {
+      debugPrint('PATCH Error: $e');
+      throw Exception(_handleError(e));
+    }
+  }
+
+  // Update Sales Order - PATCH to SalesOrder endpoint
+  Future<dynamic> updateSalesOrder({
+    required String documentNo,
+    String? postingDate,
+    Map<String, dynamic>? additionalFields,
+  }) async {
+    Map<String, dynamic> body = {};
+    
+    if (postingDate != null) {
+      body['Posting_Date'] = postingDate;
+    }
+    
+    if (additionalFields != null) {
+      body.addAll(additionalFields);
+    }
+
+    debugPrint('Updating sales order $documentNo with: $body');
+
+    try {
+      final response = await patch(
+        "SalesOrder(Document_Type='Order',No='$documentNo')",
+        body: body,
+        additionalHeaders: {
+          'If-Match': '*',
+        },
+      );
+      
+      debugPrint('Sales Order Update Response: $response');
+      return response;
+    } catch (e) {
+      debugPrint('Error updating sales order: $e');
+      throw Exception('Failed to update sales order: $e');
+    }
+  }
+
+  // Update Sales Order Line - PATCH to SalesLine endpoint
+  Future<dynamic> updateSalesOrderLine({
+    required String documentNo,
+    required int lineNo,
+    double? quantity,
+    String? unitOfMeasureCode,
+    Map<String, dynamic>? additionalFields,
+  }) async {
+    Map<String, dynamic> body = {};
+    
+    if (quantity != null) {
+      body['Quantity'] = quantity;
+    }
+    
+    if (unitOfMeasureCode != null) {
+      body['Unit_of_Measure_Code'] = unitOfMeasureCode;
+    }
+    
+    if (additionalFields != null) {
+      body.addAll(additionalFields);
+    }
+
+    debugPrint('Updating sales order line $documentNo:$lineNo with: $body');
+
+    try {
+      final response = await patch(
+        "SalesLine(Document_Type='Order',Document_No='$documentNo',Line_No=$lineNo)",
+        body: body,
+        additionalHeaders: {
+          'If-Match': '*',
+        },
+      );
+      
+      debugPrint('Sales Order Line Update Response: $response');
+      return response;
+    } catch (e) {
+      debugPrint('Error updating sales order line: $e');
+      throw Exception('Failed to update sales order line: $e');
     }
   }
 

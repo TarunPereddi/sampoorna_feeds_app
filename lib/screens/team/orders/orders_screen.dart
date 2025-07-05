@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../models/sales_person.dart';
 import '../../../mixins/tab_refresh_mixin.dart';
 import 'create_order_screen.dart';
 import 'order_list_view.dart';
@@ -183,15 +184,33 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      final salesPerson = authService.currentUser;
+      final user = authService.currentUser;
       
-      if (salesPerson == null) {
+      if (user == null) {
         throw Exception('User not authenticated');
       }
 
-      // Use the updated getSalesOrders method with includeCount=true
+      // Build the base filter for team codes
+      String? baseFilter;
+      if (user.runtimeType.toString().contains('SalesPerson')) {
+        // For team persona, use Team_Code filter with support for multiple codes
+        final codeString = user.code as String;
+        final codes = codeString.isNotEmpty ? codeString.split(',') : [];
+        
+        if (codes.isNotEmpty) {
+          if (codes.length > 1) {
+            // Multiple codes: create OR filter with parentheses for proper precedence
+            baseFilter = "(${codes.map((code) => "Team_Code eq '${code.trim()}'").join(' or ')})";
+          } else {
+            // Single code
+            baseFilter = "Team_Code eq '${codes.first.trim()}'";
+          }
+        }
+      }
+
+      // Use the updated getSalesOrders method with searchFilter instead of salesPersonName
       final response = await _apiService.getSalesOrders(
-        salesPersonName: salesPerson.name,
+        searchFilter: baseFilter,
         searchQuery: _searchQuery,
         status: _getApiStatusValue(_selectedStatus),
         fromDate: _fromDate,

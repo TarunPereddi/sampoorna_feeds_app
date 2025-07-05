@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 import '../../../services/api_service.dart';
 import '../../../services/pdf_service.dart';
 import '../../../widgets/common_app_bar.dart';
@@ -28,10 +31,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     locale: 'en_IN',
     symbol: '₹',
     decimalDigits: 2,
-  );  
+  );
   
   @override
-  
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
@@ -300,13 +302,47 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'ID: ${widget.customerNo}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'ID: ${widget.customerNo}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (_customerDetails['Responsibility_Center'] != null && 
+                        _customerDetails['Responsibility_Center'].toString().trim().isNotEmpty) ...[
+                      const Text(
+                        ' - ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          _customerDetails['Responsibility_Center'].toString(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -340,14 +376,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                const SizedBox(height: 8),                // Generate Report Button and Balance on same line
+                const SizedBox(height: 8),                // Generate Report and QR Code Buttons and Balance on same line
                 Row(
                   children: [
                     // Generate Report Button (with width limit)
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final isSmallScreen = MediaQuery.of(context).size.width < 400;
-                        final buttonWidth = isSmallScreen ? 140.0 : 160.0; // Fixed width limit
+                        final buttonWidth = isSmallScreen ? 105.0 : 120.0; // Reduced width to fit both buttons
                         
                         return SizedBox(
                           width: buttonWidth,
@@ -359,18 +395,57 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                               elevation: 0,
                               padding: EdgeInsets.symmetric(
                                 vertical: isSmallScreen ? 6 : 8, 
-                                horizontal: isSmallScreen ? 6 : 8, // Reduced horizontal padding
+                                horizontal: isSmallScreen ? 4 : 6, // Reduced horizontal padding
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
-                            icon: Icon(Icons.description, size: isSmallScreen ? 16 : 18),
+                            icon: Icon(Icons.description, size: isSmallScreen ? 14 : 16),
                             label: Flexible(
                               child: Text(
-                                'Generate Report',
+                                'Report',
                                 style: TextStyle(
-                                  fontSize: isSmallScreen ? 10 : 12, // Smaller font to fit
+                                  fontSize: isSmallScreen ? 9 : 11, // Smaller font to fit
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8), // Space between buttons
+                    // QR Code Button
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isSmallScreen = MediaQuery.of(context).size.width < 400;
+                        final buttonWidth = isSmallScreen ? 80.0 : 90.0; // Width for QR button
+                        
+                        return SizedBox(
+                          width: buttonWidth,
+                          child: ElevatedButton.icon(
+                            onPressed: _generateQRCode,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: isBlocked ? Colors.red.shade700 : const Color(0xFF2C5F2D),
+                              elevation: 0,
+                              padding: EdgeInsets.symmetric(
+                                vertical: isSmallScreen ? 6 : 8, 
+                                horizontal: isSmallScreen ? 4 : 6,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            icon: Icon(Icons.qr_code, size: isSmallScreen ? 14 : 16),
+                            label: Flexible(
+                              child: Text(
+                                'QR',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 9 : 11,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -1424,6 +1499,151 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
           );
         },
       );
+    }
+  }
+
+  // Generate QR code for customer payment
+  Future<void> _generateQRCode() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext loadingContext) {
+        return const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Generating QR Code...'),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      final qrCodeBase64 = await _apiService.generatePaymentQRCode(widget.customerNo);
+      
+      // Always close loading dialog first
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // Close loading dialog
+        
+        // Show QR dialog after a brief delay
+        await Future.delayed(const Duration(milliseconds: 150));
+        
+        if (mounted) {
+          _showQRCodeDialog(qrCodeBase64);
+        }
+      }
+    } catch (e) {
+      // Always close loading dialog first
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // Close loading dialog
+        
+        // Show error after a brief delay
+        await Future.delayed(const Duration(milliseconds: 150));
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error generating QR code: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Show QR code in dialog
+  void _showQRCodeDialog(String base64Image) {
+    final imageBytes = base64Decode(base64Image);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext qrDialogContext) {
+        return WillPopScope(
+          onWillPop: () async {
+            // Ensure only the QR dialog is closed, not the customer detail screen
+            return true;
+          },
+          child: Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Payment QR Code',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF2C5F2D),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Image.memory(
+                      imageBytes,
+                      width: 320,
+                      height: 320,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          // Explicitly close only this dialog
+                          Navigator.of(qrDialogContext, rootNavigator: false).pop();
+                        },
+                        child: const Text('Close'),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => _shareQRCode(imageBytes),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2C5F2D),
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.share),
+                        label: const Text('Share'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Share QR code image
+  Future<void> _shareQRCode(Uint8List imageBytes) async {
+    try {
+      await Share.shareXFiles([
+        XFile.fromData(
+          imageBytes,
+          name: 'qr_code_${widget.customerNo}.png',
+          mimeType: 'image/png',
+        ),
+      ], text: 'Payment QR Code for Customer ${widget.customerNo}');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sharing QR code: $e')),
+        );
+      }
     }
   }
 }

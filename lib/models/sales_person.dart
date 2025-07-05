@@ -43,4 +43,7 @@ class SalesPerson {
   
   List<String> get locationCodes => 
       location.isNotEmpty ? location.split(',') : [];
+      
+  List<String> get codes => 
+      code.isNotEmpty ? code.split(',') : [];
 }

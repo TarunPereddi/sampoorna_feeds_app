@@ -38,6 +38,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   List<Map<String, dynamic>> _originalItems = [];
   List<int> _itemsToDelete = [];
   List<Map<String, dynamic>> _itemsToAdd = [];
+  List<Map<String, dynamic>> _itemsToUpdate = [];
     // Controllers for editable fields
   final TextEditingController _orderDateController = TextEditingController();
   final TextEditingController _deliveryDateController = TextEditingController();
@@ -52,6 +53,11 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   // Error state
   String? _errorMessage;
   String _submissionStatus = '';
+  
+  // Edit mode state
+  bool _isEditingItem = false;
+  int? _editingItemIndex;
+  Map<String, dynamic>? _editingItemData;
   
   @override
   void initState() {
@@ -189,6 +195,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       // Clear tracking collections since we're reloading
       _itemsToDelete = [];
       _itemsToAdd = [];
+      _itemsToUpdate = [];
 
       debugPrint('Order items loaded: ${_orderItems.length}');
       // Log all line numbers for verification
@@ -501,9 +508,12 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           // Order Item Form Widget
           OrderItemFormWidget(
             isSmallScreen: isSmallScreen,
-            onAddItem: _addItem,
-            locationCode: _orderData!['Location_Code'] as String? ?? '',            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
+            onAddItem: _isEditingItem ? _updateItem : _addItem,
+            onCancelEdit: _isEditingItem ? _cancelEdit : null,
+            locationCode: _orderData!['Location_Code'] as String? ?? '',
+            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
             isEditMode: true,
+            editingItemData: _editingItemData,
           ),
           const SizedBox(height: 16), // Reduced spacing
           
@@ -511,7 +521,9 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           OrderItemsListWidget(
             items: _orderItems,
             isSmallScreen: isSmallScreen,
-            onRemoveItem: _removeItem,            onClearAll: _clearAllItems,
+            onRemoveItem: _removeItem,
+            onEditItem: _editItem,
+            onClearAll: _clearAllItems,
             totalAmount: _calculateOrderTotal(),
           ),
           
@@ -573,45 +585,92 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       _orderItems.removeAt(index);
     });
   }
-  void _clearAllItems() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear All Items'),
-        content: const Text('Are you sure you want to remove all items from this order?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {              // Process each item like individual deletion
-              for (var item in List.from(_orderItems)) {
-                if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
-                  final lineNo = item['lineNo'] as int;
-                  // Check for duplicates before adding to delete list
-                  if (!_itemsToDelete.contains(lineNo)) {
-                    _itemsToDelete.add(lineNo);
-                    debugPrint('Adding line $lineNo to delete list');
-                  }
-                }
-              }
-              
-              setState(() {
-                _orderItems.clear();
-              });
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Clear All'),
-          ),
-        ],
+
+  void _editItem(int index) {
+    final item = _orderItems[index];
+    
+    setState(() {
+      _isEditingItem = true;
+      _editingItemIndex = index;
+      _editingItemData = Map<String, dynamic>.from(item);
+    });
+    
+    debugPrint('Editing item at index $index: ${item['itemDescription']}');
+  }
+
+  void _updateItem(Map<String, dynamic> updatedItem) {
+    if (_editingItemIndex == null) return;
+    
+    final originalItem = _orderItems[_editingItemIndex!];
+    
+    // Check if this is an existing item (has lineNo) or a new item
+    if (originalItem.containsKey('lineNo') && originalItem['lineNo'] != null && originalItem['lineNo'] > 0) {
+      // This is an existing item - track it for update
+      final lineNo = originalItem['lineNo'] as int;
+      
+      // Remove from update list if it exists (to avoid duplicates)
+      _itemsToUpdate.removeWhere((item) => item['lineNo'] == lineNo);
+      
+      // Add the updated item to the update list
+      _itemsToUpdate.add(updatedItem);
+      
+      debugPrint('Added line $lineNo to update list with quantity: ${updatedItem['quantity']}, UOM: ${updatedItem['unitOfMeasure']}');
+    } else {
+      // This is a new item being edited before save - just update it in place
+      debugPrint('Updating new item (not yet saved) at index $_editingItemIndex');
+    }
+    
+    // Update the item in the display list
+    setState(() {
+      _orderItems[_editingItemIndex!] = updatedItem;
+      _isEditingItem = false;
+      _editingItemIndex = null;
+      _editingItemData = null;
+    });
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Item updated successfully'),
+        backgroundColor: Colors.green,
       ),
     );
   }
+
+  void _cancelEdit() {
+    setState(() {
+      _isEditingItem = false;
+      _editingItemIndex = null;
+      _editingItemData = null;
+    });
+  }
+
+  void _clearAllItems() {
+    setState(() {
+      // Clear all items from the order
+      _orderItems.clear();
+      
+      // Clear all tracking lists
+      _itemsToAdd.clear();
+      _itemsToUpdate.clear();
+      _itemsToDelete.clear();
+      
+      // Reset editing state
+      _isEditingItem = false;
+      _editingItemIndex = null;
+      _editingItemData = null;
+    });
+    
+    // Show confirmation message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('All items cleared from order'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  // ...existing code...
   
   double _calculateOrderTotal() {
     double total = 0;
@@ -775,7 +834,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             unitOfMeasureCode: item['unitOfMeasure'],
           );
         }
-      }      _updateSubmissionStatus('Order updated successfully!');
+      }
+
+      // 4. Update existing items that have been modified
+      if (_itemsToUpdate.isNotEmpty) {
+        _updateSubmissionStatus('Updating existing items...');
+
+        for (int i = 0; i < _itemsToUpdate.length; i++) {
+          final item = _itemsToUpdate[i];
+          final lineNo = item['lineNo'] as int;
+          
+          _updateSubmissionStatus('Updating item ${i+1} of ${_itemsToUpdate.length}: ${item['itemDescription']}...');
+
+          try {
+            await _apiService.updateSalesOrderLine(
+              documentNo: widget.orderNo,
+              lineNo: lineNo,
+              quantity: item['quantity'] as double,
+              unitOfMeasureCode: item['unitOfMeasure'] as String,
+            );
+            
+            debugPrint('Successfully updated line $lineNo');
+          } catch (e) {
+            debugPrint('Error updating line $lineNo: $e');
+            throw Exception('Failed to update item ${item['itemDescription']}: $e');
+          }
+        }
+      }
+
+      _updateSubmissionStatus('Order updated successfully!');
       
       // Reset ship-to code change tracking after successful update
       if (_shipToCodeChanged) {
@@ -793,12 +880,13 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             backgroundColor: Colors.green,
           ),
         );
-      }setState(() {
+      }      setState(() {
         _isSubmitting = false;
         // Clear the tracking arrays after successful update
         if (!shouldStayOnEditScreen) {
           _itemsToDelete.clear();
           _itemsToAdd.clear();
+          _itemsToUpdate.clear();
         }
       });
       

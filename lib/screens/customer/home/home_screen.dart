@@ -21,7 +21,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin, TabRefreshMixin {  final ApiService _apiService = ApiService();
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin, TabRefreshMixin {
+  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   List<dynamic> _recentOrders = [];
   bool _dataLoaded = false; // Track if data has been loaded
@@ -33,7 +34,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     'releasedOrders': 0,
     'openOrders': 0,
   };
-    @override
+
+  @override
   bool get wantKeepAlive => true; // Keep the state when switching tabs
 
   // TabRefreshMixin implementation
@@ -114,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       final now = DateTime.now();
       final twoDaysAgo = now.subtract(const Duration(hours: 48));
 
-      // Only filter by Sell_to_Customer_No
+      // For customer persona, only filter by customer number (not salesperson codes)
       final filter = "Sell_to_Customer_No eq '$customerNo'";
       final ordersData = await _apiService.getSalesOrders(
         searchFilter: filter,
@@ -143,6 +145,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     try {
       // Customers card not needed for customer persona, so skip loading customersCount
 
+      // For customer persona, only filter by customer number (not salesperson codes)
+      final baseFilter = "Sell_to_Customer_No eq '$customerNo'";
+
       // Load order counts by status with individual error handling
       int pendingCount = 0;
       int releasedCount = 0;
@@ -150,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       try {
         final pendingResponse = await _apiService.getSalesOrders(
-          searchFilter: "Sell_to_Customer_No eq '$customerNo'",
+          searchFilter: baseFilter,
           status: 'Pending Approval',
           limit: 1,
           includeCount: true,
@@ -162,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       try {
         final releasedResponse = await _apiService.getSalesOrders(
-          searchFilter: "Sell_to_Customer_No eq '$customerNo'",
+          searchFilter: baseFilter,
           status: 'Released',
           limit: 1,
           includeCount: true,
@@ -174,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       try {
         final openResponse = await _apiService.getSalesOrders(
-          searchFilter: "Sell_to_Customer_No eq '$customerNo'",
+          searchFilter: baseFilter,
           status: 'Open',
           limit: 1,
           includeCount: true,

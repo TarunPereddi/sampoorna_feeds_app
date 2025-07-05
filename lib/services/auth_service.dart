@@ -1,4 +1,3 @@
- 
 // lib/services/auth_service.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +41,17 @@ class AuthService extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
 
+  // Get the original username (user ID) for API calls that need the login username
+  Future<String?> get originalUsername async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_usernameKey);
+    } catch (e) {
+      print('Error getting original username: $e');
+      return null;
+    }
+  }
+
   // Helper to convert Customer to JSON (since Customer may not have toJson)
   Map<String, dynamic> _customerToJson(Customer customer) {
     return {
@@ -76,8 +86,6 @@ class AuthService extends ChangeNotifier {
       print('Error saving session: $e');
     }
   }
-  // ...existing code...
-
   // Check for existing session on app startup
   Future<void> checkExistingSession() async {
     try {
@@ -254,7 +262,31 @@ class AuthService extends ChangeNotifier {
               notifyListeners();
               return false;
             }
-            _currentUser = SalesPerson.fromJson(salesPersons[0]);
+            
+            // Create initial SalesPerson object
+            var salesPerson = SalesPerson.fromJson(salesPersons[0]);
+            
+            // Now fetch Webuser details to override code and location
+            final webuserResponse = await apiService.get('Webuser', 
+              queryParams: {'\$filter': "User_Name eq '$username'"});
+            
+            final webusers = webuserResponse['value'] as List;
+            
+            if (webusers.isNotEmpty) {
+              final webuser = webusers[0];
+              // Override code and location with data from Webuser
+              salesPerson = SalesPerson(
+                code: webuser['Sales_Person_Code'] ?? salesPerson.code,
+                name: salesPerson.name,
+                responsibilityCenter: salesPerson.responsibilityCenter,
+                blocked: salesPerson.blocked,
+                email: salesPerson.email,
+                location: webuser['Location_Code'] ?? salesPerson.location,
+                phoneNo: salesPerson.phoneNo,
+              );
+            }
+            
+            _currentUser = salesPerson;
             await _saveSession(_currentUser!, username);
             _isLoading = false;
             notifyListeners();
@@ -404,37 +436,30 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
 
       final ApiService apiService = ApiService();
+      Map<String, dynamic> result;
+      
       if (persona == 'customer') {
         // Customer-specific reset password API
-        final apiResult = await apiService.postWithStatus(
-          'API_ResetPasswordCustomer',
-          body: {
-            'userID': userId,
-            'oldPassword': oldPassword,
-            'newPassword': newPassword,
-          },
-        );
-        _isLoading = false;
-        notifyListeners();
-        return ForgotPasswordResult(
-          success: apiResult['statusCode'] == 200,
-          message: apiResult['body']['value'] ?? 'Wrong Password',
-          statusCode: apiResult['statusCode'],
-        );
-      } else {
-        // Default (sales/team)
-        final result = await apiService.resetPassword(
+        result = await apiService.resetPasswordCustomer(
           userId: userId,
           oldPassword: oldPassword,
           newPassword: newPassword,
         );
-        _isLoading = false;
-        notifyListeners();
-        return ForgotPasswordResult(
-          success: result['success'],
-          message: result['message'],
+      } else {
+        // Default (sales/team)
+        result = await apiService.resetPassword(
+          userId: userId,
+          oldPassword: oldPassword,
+          newPassword: newPassword,
         );
       }
+      
+      _isLoading = false;
+      notifyListeners();
+      return ForgotPasswordResult(
+        success: result['success'],
+        message: result['message'],
+      );
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -445,7 +470,7 @@ class AuthService extends ChangeNotifier {
     }
   }
   
-  Future<bool> completeFirstTimeLogin(String username, String password) async {
+  Future<bool> completeFirstTimeLogin(String username, String password, {String persona = 'sales'}) async {
     try {
       _isLoading = true;
       _error = null;
@@ -453,9 +478,19 @@ class AuthService extends ChangeNotifier {
       
       final ApiService apiService = ApiService();
       
+      // Use persona-specific login API
+      String endpoint;
+      if (persona == 'team') {
+        endpoint = 'API_SalesTeamLoginAppWebuser';
+      } else if (persona == 'customer') {
+        endpoint = 'API_LoginAppCustomer';
+      } else {
+        endpoint = 'API_SalesPersonLoginAppWebuser'; 
+      }
+      
       // Try the login again after password change
       final loginResponse = await apiService.post(
-        'API_LoginApp',
+        endpoint,
         body: {
           'userID': username,
           'password': password,
@@ -463,27 +498,71 @@ class AuthService extends ChangeNotifier {
       );
       
       if (loginResponse['value'] == 'OK') {
-        // Get the sales person details
-        final response = await apiService.get('SalesPerson', 
-          queryParams: {'\$filter': "Code eq '$username'"});
-        
-        final salesPersons = response['value'] as List;
-        
-        if (salesPersons.isEmpty) {
-          _error = 'User not found';
-          _isLoading = false;
-          notifyListeners();
-          return false;
+        if (persona == 'customer') {
+          // Fetch customer details
+          final customerRes = await apiService.get(
+            "CustomerCard",
+            queryParams: {"\$filter": "No eq '$username'"},
+          );
+          final customers = customerRes['value'] as List?;
+          if (customers == null || customers.isEmpty) {
+            _error = 'Customer not found';
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
+          // Use Customer model
+          final customerObj = Customer.fromJson(customers[0]);
+          _currentUser = customerObj;
+          await _saveSession(customerObj, username);
+        } else {
+          // Get the sales person details for sales/team personas
+          final response = await apiService.get('SalesPerson', 
+            queryParams: {'\$filter': "Code eq '$username'"});
+          
+          final salesPersons = response['value'] as List;
+          
+          if (salesPersons.isEmpty) {
+            _error = 'User not found';
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
+          
+          if (salesPersons[0]['Block'] == true) {
+            _error = 'User is blocked';
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
+          
+          // Create initial SalesPerson object
+          var salesPerson = SalesPerson.fromJson(salesPersons[0]);
+          
+          // Now fetch Webuser details to override code and location
+          final webuserResponse = await apiService.get('Webuser', 
+            queryParams: {'\$filter': "User_Name eq '$username'"});
+          
+          final webusers = webuserResponse['value'] as List;
+          
+          if (webusers.isNotEmpty) {
+            final webuser = webusers[0];
+            // Override code and location with data from Webuser
+            salesPerson = SalesPerson(
+              code: webuser['Sales_Person_Code'] ?? salesPerson.code,
+              name: salesPerson.name,
+              responsibilityCenter: salesPerson.responsibilityCenter,
+              blocked: salesPerson.blocked,
+              email: salesPerson.email,
+              location: webuser['Location_Code'] ?? salesPerson.location,
+              phoneNo: salesPerson.phoneNo,
+            );
+          }
+          
+          _currentUser = salesPerson;
+          await _saveSession(_currentUser!, username);
         }
         
-        if (salesPersons[0]['Block'] == true) {
-          _error = 'User is blocked';
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        }
-          _currentUser = SalesPerson.fromJson(salesPersons[0]);
-        await _saveSession(_currentUser!, username);
         _isLoading = false;
         notifyListeners();
         return true;

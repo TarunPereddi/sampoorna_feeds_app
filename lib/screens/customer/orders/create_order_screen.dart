@@ -257,7 +257,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           customerNo: customerNo,
           shipToCode: shipToCode,
           locationCode: locationCode,
-          salesPersonCode: salesPerson.code,
+          // Customer orders don't need salesPersonCode
         );
       } catch (headerError) {
         print('Error creating sales order header: $headerError');

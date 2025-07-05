@@ -7,11 +7,13 @@ import '../../utils/app_colors.dart';
 class FirstTimePasswordChangeScreen extends StatefulWidget {
   final String username;
   final String currentPassword;
+  final String persona;
   
   const FirstTimePasswordChangeScreen({
     super.key,
     required this.username,
     required this.currentPassword,
+    required this.persona,
   });
 
   @override
@@ -442,6 +444,7 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
         userId: widget.username,
         oldPassword: _oldPasswordController.text.trim(),
         newPassword: _newPasswordController.text.trim(),
+        persona: widget.persona,
       );
       
       if (result.success) {
@@ -449,11 +452,18 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
         final loginSuccess = await authService.completeFirstTimeLogin(
           widget.username,
           _newPasswordController.text.trim(),
+          persona: widget.persona,
         );
         
         if (loginSuccess && mounted) {
-          // Navigate to sales shell
-          Navigator.pushReplacementNamed(context, '/sales');
+          // Navigate based on persona
+          if (widget.persona == 'customer') {
+            Navigator.pushReplacementNamed(context, '/customer');
+          } else if (widget.persona == 'team') {
+            Navigator.pushReplacementNamed(context, '/team');
+          } else {
+            Navigator.pushReplacementNamed(context, '/sales');
+          }
         }
       }
     } catch (e) {
