@@ -1171,7 +1171,7 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
         ),
         const SizedBox(height: 6),
         GestureDetector(
-          onTap: _isItemEditing ? null : () async {
+          onTap: () async {
             if (widget.locationCode == null || widget.locationCode!.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please select a location first')),
@@ -1200,9 +1200,9 @@ void didUpdateWidget(OrderItemFormWidget oldWidget) {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: _isItemEditing ? Colors.grey.shade400 : Colors.grey.shade300),
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
-              color: _isItemEditing ? Colors.grey.shade100 : Colors.white,
+              color: Colors.white,
             ),
             child: Row(
               children: [
