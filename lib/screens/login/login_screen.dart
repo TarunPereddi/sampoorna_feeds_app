@@ -290,6 +290,33 @@ Row(
 
             // Login button
             _buildLoginButton(isSmallScreen),
+            
+            // Development Mock Login Button (only for customer persona) - HIDDEN FOR NOW
+            // if (_selectedPersona == 'customer') ...[
+            //   const SizedBox(height: 8),
+            //   SizedBox(
+            //     height: isSmallScreen ? 40 : 45,
+            //     child: ElevatedButton(
+            //       onPressed: _isLoading ? null : () => _handleMockLogin(context),
+            //       style: ElevatedButton.styleFrom(
+            //         backgroundColor: Colors.orange,
+            //         foregroundColor: Colors.white,
+            //         disabledBackgroundColor: AppColors.grey300,
+            //         shape: RoundedRectangleBorder(
+            //           borderRadius: BorderRadius.circular(10),
+            //         ),
+            //         elevation: 2,
+            //       ),
+            //       child: Text(
+            //         'DEV: Mock Customer Login',
+            //         style: TextStyle(
+            //           fontSize: isSmallScreen ? 12 : 14,
+            //           fontWeight: FontWeight.bold,
+            //         ),
+            //       ),
+            //     ),
+            //   ),
+            // ],
           ],
         ),
       ),
@@ -559,10 +586,77 @@ Row(
             Navigator.pushReplacementNamed(context, '/customer');
           }
         }
+      } else if (result == false) {
+        // Login failed - check if it's a customer login permission issue
+        final authService = Provider.of<AuthService>(context, listen: false);
+        if (authService.error == 'Customer login not permitted' && _selectedPersona == 'customer') {
+          // Clear the password field for security and reset states
+          setState(() {
+            _passwordController.clear();
+          });
+        }
       }
     } catch (e) {
       // Error handling is done by AuthService
       debugPrint('Login error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Mock login handler for development
+  Future<void> _handleMockLogin(BuildContext context) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      
+      // Create mock customer data with Mobile_App_Enable set to true
+      final mockCustomerData = {
+        'No': 'SFC00030',
+        'Name': 'DHUMAN SINGH POULTRY FARM PROP DHUMAN SINGH',
+        'Phone_No': '9814156806',
+        'Address': 'S/O:SHANKAR SINGH ,HIALA,NAWANSHAHAR,PUNJAB',
+        'E_Mail': '',
+        'City': 'NAWANSHAHR',
+        'State_Code': 'PB',
+        'GST_Registration_No': '', // Unregistered customer
+        'P_A_N_No': 'BJBPS9115D',
+        'Customer_Price_Group': 'PB-25%-170',
+        'Balance_LCY': 132847,
+        'Customer_Location': '', // Empty as per API data
+        'Blocked': ' ',
+        'Responsibility_Center': 'FEED',
+        'Salesperson_Code': 'SAM36',
+        'Mobile_App_Enable': true, // Set to true for mock login (overriding the false from API data)
+      };
+
+      // Set mock customer directly in auth service
+      await authService.setMockCustomer(mockCustomerData, 'customer');
+      
+      // Set global persona state
+      PersonaState.setPersona('customer');
+      
+      // Navigate to customer shell
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/customer');
+      }
+    } catch (e) {
+      debugPrint('Mock login error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Mock login failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

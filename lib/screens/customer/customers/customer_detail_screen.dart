@@ -25,6 +25,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
   bool _isLoadingTransactions = false;
   String? _errorMessage;
   late TabController _tabController;
+  String? _salesPersonName;
   
   // Indian Rupee currency formatter
   final _currencyFormat = NumberFormat.currency(
@@ -67,6 +68,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       // Load transactions after customer details are loaded
       _loadTransactions();
       
+      // Load sales person name
+      _fetchSalesPersonName();
+      
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load customer details: $e';
@@ -75,7 +79,29 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       debugPrint('Error loading customer details: $e');
     }
   }
-    Future<void> _loadTransactions() async {
+  
+  Future<void> _fetchSalesPersonName() async {
+    try {
+      final salespersonCode = _customerDetails['Salesperson_Code'];
+      if (salespersonCode != null && salespersonCode.toString().isNotEmpty) {
+        final salesPersonNames = await _apiService.getSalesPersonNames([salespersonCode]);
+        setState(() {
+          _salesPersonName = salesPersonNames[salespersonCode] ?? salespersonCode;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching sales person name: $e');
+      // Set fallback to code if name fetch fails
+      final salespersonCode = _customerDetails['Salesperson_Code'];
+      if (salespersonCode != null) {
+        setState(() {
+          _salesPersonName = salespersonCode;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadTransactions() async {
     setState(() {
       _isLoadingTransactions = true;
     });
@@ -560,6 +586,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                         : 'Not Available',
                   ),
                   
+                  // Sales Person
+                  _buildInfoRow(
+                    Icons.person_outline,
+                    'Sales Person',
+                    _salesPersonName ?? _customerDetails['Salesperson_Code'] ?? 'Not Available',
+                  ),
+                  
                   // Additional fields can be added here if needed
                 ],
               ),
@@ -734,9 +767,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
   Widget _buildFinanceTab() {
     // Format currency values
     final netChange = _customerDetails['Net_Change'] ?? 0.0;
-    final creditLimit = _customerDetails['Credit_Limit_LCY'] ?? 0.0;
     final formattedNetChange = _currencyFormat.format(netChange);
-    final formattedCreditLimit = _currencyFormat.format(creditLimit);
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -779,29 +810,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                           color: netChange < 0 ? Colors.green.shade700 : 
                                  netChange > 0 ? Colors.red : 
                                  Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const Divider(height: 24),
-                  
-                  // Credit Limit
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Credit Limit',
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      Text(
-                        formattedCreditLimit,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
@@ -1297,9 +1305,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                       ),
                     ),
                   ],
-                ),
-              ),
-            );
+                ),),
+              );
           },
         );
       },

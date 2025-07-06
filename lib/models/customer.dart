@@ -13,6 +13,7 @@ class Customer {
   final String? blocked; // Add blocked field
   final String? responsibilityCenter; // Add responsibility center field
   final String? salespersonCode; // Add salesperson code field
+  final bool? mobileAppEnable; // Add mobile app enable field
 
   Customer({
     required this.no,
@@ -30,6 +31,7 @@ class Customer {
     this.blocked, // Add to constructor
     this.responsibilityCenter, // Add to constructor
     this.salespersonCode, // Add to constructor
+    this.mobileAppEnable, // Add to constructor
   });
 
   factory Customer.fromJson(Map<String, dynamic> json) {
@@ -52,6 +54,7 @@ class Customer {
       customerLocation: json['Customer_Location'] as String?, // Add customerLocation field from JSON
       responsibilityCenter: json['Responsibility_Center'] as String?, // Add responsibility center field from JSON
       salespersonCode: json['Salesperson_Code'] as String?, // Add salesperson code field from JSON
+      mobileAppEnable: json['Mobile_App_Enable'] as bool?, // Add mobile app enable field from JSON
     );
   }
 

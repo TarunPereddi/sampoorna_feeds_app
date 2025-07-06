@@ -80,6 +80,10 @@ class AuthService extends ChangeNotifier {
       'customerPriceGroup': customer.customerPriceGroup,
       'balanceLcy': customer.balanceLcy,
       'blocked': customer.blocked,
+      'customerLocation': customer.customerLocation, // Add customerLocation field
+      'responsibilityCenter': customer.responsibilityCenter, // Add responsibility center field
+      'salespersonCode': customer.salespersonCode, // Add salesperson code field
+      'mobileAppEnable': customer.mobileAppEnable, // Add mobile app enable field
     };
   }
 
@@ -131,6 +135,10 @@ class AuthService extends ChangeNotifier {
                 'Customer_Price_Group': userMap['customerPriceGroup'] ?? userMap['Customer_Price_Group'],
                 'Balance_LCY': userMap['balanceLcy'] ?? userMap['Balance_LCY'] ?? 0,
                 'Blocked': userMap['blocked'] ?? userMap['Blocked'],
+                'Customer_Location': userMap['customerLocation'] ?? userMap['Customer_Location'],
+                'Responsibility_Center': userMap['responsibilityCenter'] ?? userMap['Responsibility_Center'],
+                'Salesperson_Code': userMap['salespersonCode'] ?? userMap['Salesperson_Code'],
+                'Mobile_App_Enable': userMap['mobileAppEnable'] ?? userMap['Mobile_App_Enable'],
               });
             } else {
               _currentUser = null;
@@ -268,8 +276,19 @@ class AuthService extends ChangeNotifier {
               notifyListeners();
               return false;
             }
+            
+            // Check if Mobile_App_Enable is true
+            final customerData = customers[0];
+            final mobileAppEnabled = customerData['Mobile_App_Enable'] == true;
+            if (!mobileAppEnabled) {
+              _error = 'Customer login not permitted';
+              _isLoading = false;
+              notifyListeners();
+              return false;
+            }
+            
             // Use Customer model
-            final customerObj = Customer.fromJson(customers[0]);
+            final customerObj = Customer.fromJson(customerData);
             _currentUser = customerObj;
             await _saveSession(customerObj, username, persona: persona);
             _isLoading = false;
@@ -716,5 +735,32 @@ class AuthService extends ChangeNotifier {
     _currentUser = null;
     await clearSession();
     notifyListeners();
+  }
+
+  // Mock customer login for development
+  Future<void> setMockCustomer(Map<String, dynamic> customerData, String persona) async {
+    try {
+      // Create customer object from mock data
+      final customer = Customer.fromJson(customerData);
+      
+      // Set as current user
+      _currentUser = customer;
+      
+      // Save mock session
+      await _saveSession(customer, 'mock_customer', persona: persona);
+      
+      // Clear any previous errors
+      _error = null;
+      
+      // Notify listeners
+      notifyListeners();
+      
+      debugPrint('Mock customer login successful: ${customer.name}');
+    } catch (e) {
+      _error = 'Mock login failed: $e';
+      debugPrint('Mock customer login error: $e');
+      notifyListeners();
+      throw Exception(_error);
+    }
   }
 }

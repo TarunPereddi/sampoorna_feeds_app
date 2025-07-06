@@ -446,7 +446,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     NavigationService.navigateToTab(
                       context,
                       1, // Orders tab
-                      arguments: {'initialStatus': 'Pending Approval'}
+                      arguments: {'initialStatus': 'Pending'}
                     );
                   },
                 ),

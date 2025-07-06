@@ -66,6 +66,9 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
         List<String> locationCodes = [];
         if (customer.customerLocation != null && customer.customerLocation is String && customer.customerLocation.toString().trim().isNotEmpty) {
           locationCodes = customer.customerLocation.toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+          debugPrint('Customer location codes parsed: $locationCodes');
+        } else {
+          debugPrint('Customer has no location codes. customerLocation: ${customer.customerLocation}');
         }
         // Store in orderData for later use if needed
         widget.onUpdate('locationCodes', locationCodes);
@@ -113,31 +116,39 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
   }
 
   Future<void> _fetchLocationsWithCodes(List<String> locationCodes) async {
+    debugPrint('_fetchLocationsWithCodes called with codes: $locationCodes');
     setState(() {
       _isLoadingLocations = true;
     });
 
     try {
       if (locationCodes.isEmpty) {
-        throw Exception('No locations assigned to this user');
+        debugPrint('No location codes provided for customer');
+        setState(() {
+          _locations = [];
+          _isLoadingLocations = false;
+        });
+        return;
       }
 
       // Fetch only the locations assigned to the customer
+      debugPrint('Fetching locations with codes: $locationCodes');
       final locationsData = await _apiService.getLocations(locationCodes: locationCodes);
+      debugPrint('Locations API response: $locationsData');
+      
       setState(() {
         _locations = locationsData.map((json) => Location.fromJson(json)).toList();
         _isLoadingLocations = false;
       });
+      debugPrint('Locations loaded successfully: ${_locations.length} locations');
     } catch (e) {
+      debugPrint('Error loading locations: $e');
       setState(() {
         _isLoadingLocations = false;
       });
       if (mounted) {
-        // Only show error dialog for 400 errors with message key, ignore 503 errors
-        final String errorStr = e.toString();
-        if (errorStr.contains("400") && errorStr.contains("message") && !errorStr.contains("503")) {
-          _showErrorDialog('Error loading locations: $e');
-        }
+        // Show error dialog for all errors to help with debugging
+        _showErrorDialog('Error loading locations: $e');
       }
     }
   }
