@@ -28,6 +28,9 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
   bool _isSearching = false;
   bool _dataLoaded = false;
   
+  // Sales person names cache
+  Map<String, String> _salesPersonNames = {};
+  
   // Pagination 
   int _currentPage = 1;
   int _totalItems = 0;
@@ -159,6 +162,9 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         _totalPages = (_totalItems / _itemsPerPage).ceil();
         _isLoading = false;
       });
+      
+      // Fetch sales person names for the customers
+      await _fetchSalesPersonNames();
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -168,6 +174,28 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
           SnackBar(content: Text('Error loading customers: $e')),
         );
       }
+    }
+  }
+  
+  // Fetch sales person names for the current customers
+  Future<void> _fetchSalesPersonNames() async {
+    try {
+      // Extract unique salesperson codes from customers
+      final salesPersonCodes = _customers
+          .where((customer) => customer.salespersonCode != null && customer.salespersonCode!.isNotEmpty)
+          .map((customer) => customer.salespersonCode!)
+          .toSet()
+          .toList();
+      
+      if (salesPersonCodes.isNotEmpty) {
+        final salesPersonNames = await _apiService.getSalesPersonNames(salesPersonCodes);
+        setState(() {
+          _salesPersonNames.addAll(salesPersonNames);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching sales person names: $e');
+      // Don't show error to user as this is not critical
     }
   }
   
@@ -481,6 +509,18 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
                                   : customer.balanceLcy < 0 
                                       ? Colors.green.shade700 
                                       : Colors.black87,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        // Sales person field
+                        if (customer.salespersonCode != null && customer.salespersonCode!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Sales Person: ${_salesPersonNames[customer.salespersonCode] ?? customer.salespersonCode}',
+                            style: TextStyle(
+                              color: isBlocked ? Colors.red.shade700 : Colors.black87,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),

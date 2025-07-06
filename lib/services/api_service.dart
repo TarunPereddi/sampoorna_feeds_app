@@ -248,6 +248,46 @@ class ApiService {
     return response['value'];
   }
 
+  // Get multiple sales person names in a single request for efficiency
+  Future<Map<String, String>> getSalesPersonNames(List<String> codes) async {
+    if (codes.isEmpty) {
+      return {};
+    }
+    
+    try {
+      // Remove duplicates and empty codes
+      final uniqueCodes = codes.where((code) => code.isNotEmpty).toSet().toList();
+      
+      if (uniqueCodes.isEmpty) {
+        return {};
+      }
+      
+      // Build a filter with OR conditions for each code
+      final codeFilters = uniqueCodes.map((code) => "Code eq '$code'").join(' or ');
+      final response = await get('SalesPerson', queryParams: {
+        '\$filter': codeFilters,
+        '\$select': 'Code,Name', // Select only Code and Name fields for efficiency
+      });
+
+      // Convert response to a map of code -> name
+      Map<String, String> salesPersonNames = {};
+      if (response.containsKey('value') && response['value'] is List) {
+        for (var salesPerson in response['value']) {
+          if (salesPerson is Map<String, dynamic> && 
+              salesPerson.containsKey('Code') && 
+              salesPerson.containsKey('Name')) {
+            salesPersonNames[salesPerson['Code']] = salesPerson['Name'];
+          }
+        }
+      }
+
+      return salesPersonNames;
+    } catch (e) {
+      debugPrint('Error fetching sales person names: $e');
+      return {};
+    }
+  }
+
   // Get customers list filtered by sales person code
   Future<List<dynamic>> getCustomers({
     String? searchQuery, 

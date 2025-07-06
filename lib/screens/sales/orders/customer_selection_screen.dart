@@ -33,6 +33,9 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
   bool _isLoading = false;
   bool _isSearching = false;
   
+  // Sales person names cache
+  Map<String, String> _salesPersonNames = {};
+  
   // Pagination 
   int _currentPage = 1;
   int _totalItems = 0;
@@ -107,6 +110,9 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
         _hasMoreItems = _customers.length < _totalItems;
         _isLoading = false;
       });
+      
+      // Fetch sales person names for the customers
+      await _fetchSalesPersonNames();
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -138,6 +144,9 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
         _hasMoreItems = _customers.length < _totalItems;
         _isLoadingMore = false;
       });
+      
+      // Fetch sales person names for the new customers
+      await _fetchSalesPersonNames();
     } catch (e) {
       setState(() {
         _isLoadingMore = false;
@@ -163,6 +172,29 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
       });
     });
   }
+  
+  // Fetch sales person names for the current customers
+  Future<void> _fetchSalesPersonNames() async {
+    try {
+      // Extract unique salesperson codes from customers
+      final salesPersonCodes = _customers
+          .where((customer) => customer.salespersonCode != null && customer.salespersonCode!.isNotEmpty)
+          .map((customer) => customer.salespersonCode!)
+          .toSet()
+          .toList();
+      
+      if (salesPersonCodes.isNotEmpty) {
+        final salesPersonNames = await _apiService.getSalesPersonNames(salesPersonCodes);
+        setState(() {
+          _salesPersonNames.addAll(salesPersonNames);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching sales person names: $e');
+      // Don't show error to user as this is not critical
+    }
+  }
+    
     @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -395,6 +427,24 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
                                         const SizedBox(width: 4),
                                         Text(
                                           'RC: ${customer.responsibilityCenter}',
+                                          style: TextStyle(
+                                            color: AppColors.grey600,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  // Sales person field
+                                  if (customer.salespersonCode != null && customer.salespersonCode!.isNotEmpty)
+                                    Row(
+                                      children: [
+                                        Icon(Icons.person, 
+                                            size: 14, 
+                                            color: AppColors.grey600),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Sales Person: ${_salesPersonNames[customer.salespersonCode] ?? customer.salespersonCode}',
                                           style: TextStyle(
                                             color: AppColors.grey600,
                                             fontSize: 12,

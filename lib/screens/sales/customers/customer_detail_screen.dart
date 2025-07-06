@@ -26,6 +26,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
   String? _errorMessage;
   late TabController _tabController;
   
+  // Sales person name cache
+  String? _salesPersonName;
+  
   // Indian Rupee currency formatter
   final _currencyFormat = NumberFormat.currency(
     locale: 'en_IN',
@@ -68,6 +71,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       // Load transactions after customer details are loaded
       _loadTransactions();
       
+      // Fetch sales person name if available
+      await _fetchSalesPersonName();
+      
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load customer details: $e';
@@ -104,6 +110,22 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
       setState(() {
         _isLoadingTransactions = false;
       });
+    }
+  }
+
+  // Fetch sales person name for the customer
+  Future<void> _fetchSalesPersonName() async {
+    try {
+      final salespersonCode = _customerDetails['Salesperson_Code'];
+      if (salespersonCode != null && salespersonCode.toString().isNotEmpty) {
+        final salesPersonNames = await _apiService.getSalesPersonNames([salespersonCode.toString()]);
+        setState(() {
+          _salesPersonName = salesPersonNames[salespersonCode.toString()];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching sales person name: $e');
+      // Don't show error to user as this is not critical
     }
   }
 
@@ -560,6 +582,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
                         ? _customerDetails['E_Mail'] 
                         : 'Not Available',
                   ),
+                  
+                  // Sales person
+                  if (_customerDetails['Salesperson_Code'] != null && _customerDetails['Salesperson_Code'].toString().isNotEmpty)
+                    _buildInfoRow(
+                      Icons.person,
+                      'Sales Person',
+                      _salesPersonName ?? _customerDetails['Salesperson_Code'].toString(),
+                    ),
                   
                   // Additional fields can be added here if needed
                 ],
