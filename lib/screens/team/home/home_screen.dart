@@ -6,10 +6,10 @@ import '../../../screens/login/login_screen.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/navigation_service.dart';
+import '../../../services/persona_state.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/error_dialog.dart';
 import '../../../mixins/tab_refresh_mixin.dart';
-import '../../../models/sales_person.dart';
 import '../orders/create_order_screen.dart';
 import '../orders/order_list_view.dart'; // Added import
 import '../orders/order_table_view.dart'; // Added import
@@ -81,10 +81,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         return;
       }
 
+      // Validate team code for team persona
+      if (salesPerson.teamCode.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ErrorDialog.showGenericError(
+            context,
+            message: 'Team code not found. Please contact administrator.',
+          );
+        }
+        return;
+      }
+
       // Load all data in parallel
       await Future.wait([
-        _loadRecentOrders(salesPerson.code), // Use salesperson code for sales persona
-        _loadDashboardMetrics(salesPerson.code, salesPerson.name),
+        _loadRecentOrders(salesPerson.teamCode), // Use team code for team persona
+        _loadDashboardMetrics(salesPerson.teamCode, salesPerson.name),
       ]);
 
       setState(() {
@@ -104,35 +118,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  Future<void> _loadRecentOrders(String salesPersonCode) async {
+  Future<void> _loadRecentOrders(String teamCode) async {
     try {
       // Get orders from last 48 hours
       final now = DateTime.now();
       final twoDaysAgo = now.subtract(const Duration(hours: 48));
       
-      // For sales persona, filter by Salesperson_Code
-      // Handle multiple codes if they exist (comma-separated)
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final user = authService.currentUser;
-      
-      // Get codes list - handle both single code and multiple codes
-      List<String> codes = [];
-      if (user != null && user.runtimeType.toString().contains('SalesPerson')) {
-        // For SalesPerson, use the codes property
-        final codeString = user.code as String;
-        codes = codeString.isNotEmpty ? codeString.split(',') : [salesPersonCode];
-      } else {
-        // Fallback to the passed parameter
-        codes = [salesPersonCode];
-      }
-      
+      // For team persona, filter by Team_Code using the team code from webuser data
+      // Handle multiple team codes separated by commas
       String filter;
+      final codes = teamCode.split(',').map((code) => code.trim()).where((code) => code.isNotEmpty).toList();
+      
       if (codes.length > 1) {
         // Multiple codes: create OR filter with parentheses for proper precedence
-        filter = "(${codes.map((code) => "Salesperson_Code eq '${code.trim()}'").join(' or ')})";
+        filter = "(${codes.map((code) => "Team_Code eq '$code'").join(' or ')})";
       } else {
         // Single code
-        filter = "Salesperson_Code eq '${codes.first.trim()}'";
+        filter = "Team_Code eq '${codes.first}'";
       }
       
       final ordersData = await _apiService.getSalesOrders(
@@ -159,45 +161,46 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  Future<void> _loadDashboardMetrics(String salesPersonCode, String salesPersonName) async {
+  Future<void> _loadDashboardMetrics(String teamCode, String salesPersonName) async {
     try {
-      // Load customers count - use a safer approach with error handling
+      // Load customers count - use team code from webuser data
       int customersCount = 0;      try {
-        final customersResult = await _apiService.getCustomersWithPagination(
-          salesPersonCode: salesPersonCode,
-          page: 1,
-          pageSize: 1, // We only need the count
-          blockFilter: null, // No block filter for count
-        );
-        customersCount = customersResult.totalCount;
+        // For team persona, we need to get customers filtered by Team_Code
+        // Handle multiple team codes separated by commas
+        String customerFilter;
+        final codes = teamCode.split(',').map((code) => code.trim()).where((code) => code.isNotEmpty).toList();
+        
+        if (codes.length > 1) {
+          // Multiple codes: create OR filter with parentheses for proper precedence
+          customerFilter = "(${codes.map((code) => "Team_Code eq '$code'").join(' or ')})";
+        } else {
+          // Single code
+          customerFilter = "Team_Code eq '${codes.first}'";
+        }
+        
+        final customersResponse = await _apiService.get('CustomerCard', queryParams: {
+          '\$count': 'true',
+          '\$top': '1',
+          '\$skip': '0',
+          '\$filter': customerFilter,
+        });
+        customersCount = customersResponse['@odata.count'] ?? 0;
       } catch (e) {
         print('Error loading customers count: $e');
         // Try alternative approach or set to 0
         customersCount = 0;
       }
       
-      // Handle multiple salesperson codes for order filtering
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final user = authService.currentUser;
-      
-      // Get codes list - handle both single code and multiple codes
-      List<String> codes = [];
-      if (user != null && user.runtimeType.toString().contains('SalesPerson')) {
-        // For SalesPerson, use the codes property
-        final codeString = user.code as String;
-        codes = codeString.isNotEmpty ? codeString.split(',') : [salesPersonCode];
-      } else {
-        // Fallback to the passed parameter
-        codes = [salesPersonCode];
-      }
-      
+      // Handle multiple team codes separated by commas for order counts
       String baseFilter;
+      final codes = teamCode.split(',').map((code) => code.trim()).where((code) => code.isNotEmpty).toList();
+      
       if (codes.length > 1) {
         // Multiple codes: create OR filter with parentheses for proper precedence
-        baseFilter = "(${codes.map((code) => "Salesperson_Code eq '${code.trim()}'").join(' or ')})";
+        baseFilter = "(${codes.map((code) => "Team_Code eq '$code'").join(' or ')})";
       } else {
         // Single code
-        baseFilter = "Salesperson_Code eq '${codes.first.trim()}'";
+        baseFilter = "Team_Code eq '${codes.first}'";
       }
       
       // Load order counts by status with individual error handling
@@ -454,14 +457,21 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();                authService.logout();
+              onPressed: () async {
+                Navigator.of(context).pop();
+                // Use the existing logout method which clears session
+                await authService.logout();
+                // Also clear persona state
+                PersonaState.setPersona('');
                 // Navigate to login screen
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );              },
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
@@ -534,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     NavigationService.navigateToTab(
                       context, 
                       1, 
-                      arguments: {'initialStatus': 'Approved'}
+                      arguments: {'initialStatus': 'Released'}
                     );
                   },
                 ),

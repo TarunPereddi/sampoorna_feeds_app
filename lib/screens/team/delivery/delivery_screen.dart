@@ -5,6 +5,7 @@ import '../../../widgets/common_app_bar.dart';
 import '../../../utils/app_colors.dart';
 import '../../../mixins/tab_refresh_mixin.dart';
 import '../../../models/sales_shipment.dart';
+import '../../../models/sales_person.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import 'document_selection_screen.dart';
@@ -46,7 +47,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
     setState(() {
       _isLoadingShipments = true;
     });    try {
-      // Get current user's salesperson code from Provider
+      // Get current user's team code from Provider
       final authService = Provider.of<AuthService>(context, listen: false);
       final currentUser = authService.currentUser;
       
@@ -54,24 +55,33 @@ class _DeliveryScreenState extends State<DeliveryScreen> with TabRefreshMixin {
         throw Exception('User not authenticated');
       }
       
-      final salespersonCode = currentUser.code;
+      // For team persona, use teamCode instead of user code
+      if (currentUser is SalesPerson) {
+        final teamCode = currentUser.teamCode;
+        
+        if (teamCode.isEmpty) {
+          throw Exception('Team code not found for team persona');
+        }
 
-      debugPrint('Loading shipments for salesperson: $salespersonCode');
+        debugPrint('Loading shipments for team code: $teamCode');
 
-      // Fetch shipments from API
-      final shipmentsData = await _apiService.getSalesShipments(
-        salespersonCode: salespersonCode,
-      );
+        // Fetch shipments from API using team code filtering
+        final shipmentsData = await _apiService.getSalesShipments(
+          teamCode: teamCode, // Use teamCode instead of salespersonCode
+        );
 
-      // Convert to SalesShipment objects
-      final shipments = shipmentsData.map((json) => SalesShipment.fromJson(json)).toList();
+        // Convert to SalesShipment objects
+        final shipments = shipmentsData.map((json) => SalesShipment.fromJson(json)).toList();
 
-      setState(() {
-        _shipments = shipments;
-        _isLoadingShipments = false;
-      });
+        setState(() {
+          _shipments = shipments;
+          _isLoadingShipments = false;
+        });
 
-      debugPrint('Loaded ${shipments.length} shipments');
+        debugPrint('Loaded ${shipments.length} shipments');
+      } else {
+        throw Exception('Invalid user type for team persona');
+      }
 
     } catch (e) {
       setState(() {

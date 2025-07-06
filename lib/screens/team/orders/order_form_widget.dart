@@ -137,7 +137,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
   }
   Future<void> _fetchInitialCustomers() async {
     try {
-      // Get the sales person code from auth service
+      // Get the sales person from auth service
       final authService = Provider.of<AuthService>(context, listen: false);
       final salesPerson = authService.currentUser;
       
@@ -145,9 +145,12 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
         throw Exception('User not authenticated');
       }
 
+      // For team persona, use teamCode and Team_Code field
+      final isTeamPersona = salesPerson.teamCode.isNotEmpty;
       final customersData = await _apiService.getCustomers(
         limit: 20,
-        salesPersonCode: salesPerson.code,
+        salesPersonCode: isTeamPersona ? salesPerson.teamCode : salesPerson.code,
+        fieldName: isTeamPersona ? 'Team_Code' : 'Salesperson_Code',
       );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
@@ -162,7 +165,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
   }
   Future<void> _searchCustomers(String query) async {
     try {
-      // Get the sales person code from auth service
+      // Get the sales person from auth service
       final authService = Provider.of<AuthService>(context, listen: false);
       final salesPerson = authService.currentUser;
       
@@ -170,9 +173,12 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
         throw Exception('User not authenticated');
       }
 
+      // For team persona, use teamCode and Team_Code field
+      final isTeamPersona = salesPerson.teamCode.isNotEmpty;
       final customersData = await _apiService.getCustomers(
         searchQuery: query,
-        salesPersonCode: salesPerson.code,
+        salesPersonCode: isTeamPersona ? salesPerson.teamCode : salesPerson.code,
+        fieldName: isTeamPersona ? 'Team_Code' : 'Salesperson_Code',
       );
       setState(() {
         _customers = customersData.map((json) => Customer.fromJson(json)).toList();
@@ -584,7 +590,7 @@ class _OrderFormWidgetState extends State<OrderFormWidget> {  // Controllers
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Ship To Code*',
+          'Ship To Code',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,

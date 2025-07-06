@@ -250,12 +250,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       // 1. Create the Sales Order Header
       _updateSubmissionStatus('Creating order...');
       
-      // Get the original username for SalesPerson_Code
-      final originalUsername = await authService.originalUsername;
-      if (originalUsername == null || originalUsername.isEmpty) {
-        throw Exception('Could not retrieve user credentials');
-      }
-      
       // Wrap API calls in try-catch blocks to handle individual failures
       Map<String, dynamic> salesOrderResponse;
       try {
@@ -263,7 +257,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           customerNo: customerNo,
           shipToCode: shipToCode,
           locationCode: locationCode,
-          salesPersonCode: originalUsername, // Use original username, not the multiple codes
+          // For team persona, don't send salesPersonCode/teamCode
+          isTeamPersona: true, // Specify this is team persona
         );
       } catch (headerError) {
         print('Error creating sales order header: $headerError');

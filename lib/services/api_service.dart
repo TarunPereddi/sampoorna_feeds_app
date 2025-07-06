@@ -254,6 +254,7 @@ class ApiService {
     int limit = 20, 
     int offset = 0,
     String? salesPersonCode,
+    String? fieldName, // Add optional field name parameter
   }) async {
     Map<String, String> queryParams = {};
 
@@ -266,7 +267,9 @@ class ApiService {
     
     // Add sales person filter if provided
     if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
-      final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, 'Salesperson_Code');
+      // Use specified field name or default to 'Salesperson_Code'
+      final filterFieldName = fieldName ?? 'Salesperson_Code';
+      final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, filterFieldName);
       if (codeFilter.isNotEmpty) {
         filters.add("($codeFilter)");
       }
@@ -583,6 +586,7 @@ class ApiService {
     required String locationCode,
     DateTime? requestedDeliveryDate, // Optional parameter
     String? salesPersonCode, // Original username/user ID for SalesPerson_Code
+    bool isTeamPersona = false, // Flag to determine if this is team persona
   }) async {
     // Create request body
     Map<String, dynamic> body = {
@@ -600,8 +604,13 @@ class ApiService {
 
     // Only include salesPersonCode if provided (for non-customer personas)
     if (salesPersonCode != null && salesPersonCode.isNotEmpty) {
-      // Use the original username as SalesPerson_Code (not the multiple codes)
-      body["SalesPerson_Code"] = salesPersonCode;
+      if (isTeamPersona) {
+        // Use Team_Code for team persona
+        body["Team_Code"] = salesPersonCode;
+      } else {
+        // Use SalesPerson_Code for sales persona
+        body["SalesPerson_Code"] = salesPersonCode;
+      }
     }
 
     debugPrint('Creating sales order: $body');
@@ -666,6 +675,7 @@ class ApiService {
     String? blockFilter,
     required int page,
     required int pageSize,
+    String? fieldName, // Optional field name, defaults to 'Salesperson_Code'
   }) async {
     Map<String, String> queryParams = {
       '\$count': 'true',
@@ -676,8 +686,9 @@ class ApiService {
     // Build filter string
     List<String> filters = [];
     
-    // Add sales person filter
-    final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, 'Salesperson_Code');
+    // Add sales person filter using the specified field name
+    final filterFieldName = fieldName ?? 'Salesperson_Code';
+    final codeFilter = _createSalesPersonCodeFilter(salesPersonCode, filterFieldName);
     if (codeFilter.isNotEmpty) {
       filters.add("($codeFilter)");
     }
@@ -1113,6 +1124,7 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
 
   Future<List<Map<String, dynamic>>> getSalesShipments({
     String? salespersonCode,
+    String? teamCode,
     String? customerCode,
   }) async {
     const String endpoint = 'SalesShipment';
@@ -1134,6 +1146,14 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
     // Add filter for salesperson if provided
     if (salespersonCode != null && salespersonCode.isNotEmpty) {
       final codeFilter = _createSalesPersonCodeFilter(salespersonCode, 'SalespersonCode');
+      if (codeFilter.isNotEmpty) {
+        filters.add("($codeFilter)");
+      }
+    }
+    
+    // Add filter for team code if provided (for team persona)
+    if (teamCode != null && teamCode.isNotEmpty) {
+      final codeFilter = _createSalesPersonCodeFilter(teamCode, 'TeamCode');
       if (codeFilter.isNotEmpty) {
         filters.add("($codeFilter)");
       }

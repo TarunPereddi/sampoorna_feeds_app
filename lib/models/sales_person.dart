@@ -7,6 +7,8 @@ class SalesPerson {
   final String email;
   final String location;
   final String phoneNo;
+  final bool isTeamLeader; // Added field for Sales_Team
+  final String teamCode; // Added field for Sales_Team_Code
   
   SalesPerson({
     required this.code,
@@ -16,6 +18,8 @@ class SalesPerson {
     this.email = '',
     this.location = '',
     this.phoneNo = '',
+    this.isTeamLeader = false, // Default to false
+    this.teamCode = '', // Default to empty string
   });
     factory SalesPerson.fromJson(Map<String, dynamic> json) {
     return SalesPerson(
@@ -26,6 +30,8 @@ class SalesPerson {
       email: json['E_Mail'] as String? ?? '',
       location: json['Location'] as String? ?? '',
       phoneNo: json['Phone_No'] as String? ?? '',
+      isTeamLeader: json['Sales_Team'] as bool? ?? false, // Map Sales_Team field
+      teamCode: json['Sales_Team_Code'] as String? ?? '', // Map Sales_Team_Code field
     );
   }
 
@@ -38,6 +44,8 @@ class SalesPerson {
       'E_Mail': email,
       'Location': location,
       'Phone_No': phoneNo,
+      'Sales_Team': isTeamLeader, // Include in JSON
+      'Sales_Team_Code': teamCode, // Include in JSON
     };
   }
   

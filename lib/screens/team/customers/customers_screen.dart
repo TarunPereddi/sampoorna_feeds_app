@@ -7,6 +7,7 @@ import '../../../widgets/common_app_bar.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/customer.dart';
+import '../../../models/sales_person.dart';
 import '../../../mixins/tab_refresh_mixin.dart';
 import 'customer_detail_screen.dart';
 
@@ -51,11 +52,17 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
   void initState() {
     super.initState();
     
-    // Get sales person code
+    // Get sales person team code
     final authService = Provider.of<AuthService>(context, listen: false);
-    final salesPerson = authService.currentUser;
-    if (salesPerson != null) {
-      _salesPersonCode = salesPerson.code;
+    final user = authService.currentUser;
+    if (user != null && user is SalesPerson) {
+      // For team persona, use the teamCode from Sales_Team_Code
+      if (user.teamCode.isNotEmpty) {
+        _salesPersonCode = user.teamCode;
+      } else {
+        // Handle missing teamCode - could show error or use fallback
+        debugPrint('Warning: Team code not found for team persona');
+      }
     }
     
     // Add search listener with debouncing
@@ -144,6 +151,7 @@ class _CustomersScreenState extends State<CustomersScreen> with AutomaticKeepAli
         page: _currentPage,
         pageSize: _itemsPerPage,
         blockFilter: null, // Show all customers regardless of blocked status
+        fieldName: 'Team_Code', // Use Team_Code for team persona filtering
       );
       setState(() {
         _customers = result.items; // API filters for us

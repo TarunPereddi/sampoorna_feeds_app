@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../models/sales_person.dart';
 import '../models/customer.dart';
 import 'api_service.dart';
+import 'persona_state.dart';
 
 class ForgotPasswordResult {
   final bool success;
@@ -35,11 +36,23 @@ class AuthService extends ChangeNotifier {
   static const String _usernameKey = 'username';
   static const String _passwordKey = 'password';
   static const String _rememberMeKey = 'remember_me';
+  static const String _personaKey = 'persona'; // Add persona key
 
   dynamic get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
+
+  // Get the saved persona
+  Future<String?> get savedPersona async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_personaKey);
+    } catch (e) {
+      print('Error getting saved persona: $e');
+      return null;
+    }
+  }
 
   // Get the original username (user ID) for API calls that need the login username
   Future<String?> get originalUsername async {
@@ -71,7 +84,7 @@ class AuthService extends ChangeNotifier {
   }
 
   // Save user session to local storage
-  Future<void> _saveSession(dynamic user, String username) async {
+  Future<void> _saveSession(dynamic user, String username, {String? persona}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (user is SalesPerson) {
@@ -82,6 +95,11 @@ class AuthService extends ChangeNotifier {
         await prefs.setString(_userKey, user);
       }
       await prefs.setString(_usernameKey, username);
+      
+      // Save persona if provided
+      if (persona != null) {
+        await prefs.setString(_personaKey, persona);
+      }
     } catch (e) {
       print('Error saving session: $e');
     }
@@ -126,6 +144,16 @@ class AuthService extends ChangeNotifier {
           // If not JSON, treat as string (legacy customerNo)
           _currentUser = userJson;
         }
+        
+        // Restore persona state if user session exists
+        if (_currentUser != null) {
+          final savedPersona = prefs.getString(_personaKey);
+          if (savedPersona != null) {
+            // Import PersonaState to set the persona
+            PersonaState.setPersona(savedPersona);
+          }
+        }
+        
         notifyListeners();
       }
     } catch (e) {
@@ -178,6 +206,7 @@ class AuthService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_userKey);
+      await prefs.remove(_personaKey); // Clear persona as well
       // Don't clear username and password if remember me is enabled
       final rememberMe = prefs.getBool(_rememberMeKey) ?? false;
       if (!rememberMe) {
@@ -242,7 +271,7 @@ class AuthService extends ChangeNotifier {
             // Use Customer model
             final customerObj = Customer.fromJson(customers[0]);
             _currentUser = customerObj;
-            await _saveSession(customerObj, username);
+            await _saveSession(customerObj, username, persona: persona);
             _isLoading = false;
             notifyListeners();
             return true;
@@ -264,6 +293,19 @@ class AuthService extends ChangeNotifier {
               
               final webuser = webusers[0];
               
+              // Check if user is a team leader (has Sales_Team = true)
+              final isTeamLeader = webuser['Sales_Team'] == true;
+              
+              if (!isTeamLeader) {
+                // If not a team leader, show error and return false
+                _error = 'Access denied: Not authorized as a team leader';
+                _isLoading = false;
+                notifyListeners();
+                // Clear any saved session data since this is not a valid team leader
+                await clearSession();
+                return false;
+              }
+              
               // Create SalesPerson object from webuser data
               final salesPerson = SalesPerson(
                 code: webuser['Sales_Person_Code'] ?? username,
@@ -273,10 +315,12 @@ class AuthService extends ChangeNotifier {
                 email: '',
                 location: webuser['Location_Code'] ?? '',
                 phoneNo: '',
+                isTeamLeader: isTeamLeader, // Set the team leader flag
+                teamCode: webuser['Sales_Team_Code'] ?? '', // Store the team code
               );
               
               _currentUser = salesPerson;
-              await _saveSession(_currentUser!, username);
+              await _saveSession(_currentUser!, username, persona: persona);
             } else {
               // Get the sales person details for sales persona
               final response = await apiService.get('SalesPerson', 
@@ -315,11 +359,12 @@ class AuthService extends ChangeNotifier {
                   email: salesPerson.email,
                   location: webuser['Location_Code'] ?? salesPerson.location,
                   phoneNo: salesPerson.phoneNo,
+                  teamCode: webuser['Sales_Team_Code'] ?? '', // Store team code for sales users too
                 );
               }
               
               _currentUser = salesPerson;
-              await _saveSession(_currentUser!, username);
+              await _saveSession(_currentUser!, username, persona: persona);
             }
             _isLoading = false;
             notifyListeners();
@@ -547,7 +592,7 @@ class AuthService extends ChangeNotifier {
           // Use Customer model
           final customerObj = Customer.fromJson(customers[0]);
           _currentUser = customerObj;
-          await _saveSession(customerObj, username);
+          await _saveSession(customerObj, username, persona: persona);
         } else {
           // Handle sales and team personas differently
           if (persona == 'team') {
@@ -578,7 +623,7 @@ class AuthService extends ChangeNotifier {
             );
             
             _currentUser = salesPerson;
-            await _saveSession(_currentUser!, username);
+            await _saveSession(_currentUser!, username, persona: persona);
           } else {
             // Get the sales person details for sales persona
             final response = await apiService.get('SalesPerson', 
@@ -624,7 +669,7 @@ class AuthService extends ChangeNotifier {
             }
             
             _currentUser = salesPerson;
-            await _saveSession(_currentUser!, username);
+            await _saveSession(_currentUser!, username, persona: persona);
           }
         }
         

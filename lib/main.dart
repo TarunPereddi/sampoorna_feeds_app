@@ -112,12 +112,20 @@ class _AppInitializerState extends State<AppInitializer> {
 
     if (mounted) {
       if (authService.isAuthenticated) {
-        // Route based on persona
+        // Route based on saved persona, not just user type
+        final savedPersona = await authService.savedPersona;
         final user = authService.currentUser;
-        if (user is SalesPerson) {
-          Navigator.of(context).pushReplacementNamed('/sales');
-        } else if (user is Customer) {
+        
+        if (user is Customer) {
           Navigator.of(context).pushReplacementNamed('/customer');
+        } else if (user is SalesPerson) {
+          // For SalesPerson, check the saved persona to determine the correct route
+          if (savedPersona == 'team') {
+            Navigator.of(context).pushReplacementNamed('/team');
+          } else {
+            // Default to sales for 'sales' persona or if no persona is saved
+            Navigator.of(context).pushReplacementNamed('/sales');
+          }
         } else {
           // fallback to login if unknown type
           Navigator.of(context).pushReplacementNamed('/login');

@@ -977,7 +977,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   TableRow _buildEditableShipToRow() {
     // Get current ship-to display text (code + name if available)
     String displayText = _shipToCodeController.text.trim();
-    if (_originalShipToName != null && _originalShipToName!.isNotEmpty) {
+    if (_originalShipToName != null && _originalShipToName!.isNotEmpty && displayText.isNotEmpty) {
       displayText = '${_shipToCodeController.text.trim()} - $_originalShipToName';
     }
     
@@ -1060,13 +1060,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Clear button - always show to allow clearing the field
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _shipToCodeController.clear();
+                            _originalShipToName = null;
+                            _shipToCodeChanged = '' != (_originalShipToCode ?? '');
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.clear,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Edit indicator
                       if (_shipToCodeChanged)
                         Icon(
                           Icons.edit,
                           size: 16,
                           color: Colors.orange.shade600,
                         ),
-                      const SizedBox(width: 4),
+                      if (_shipToCodeChanged)
+                        const SizedBox(width: 4),
+                      // Dropdown arrow
                       Icon(
                         Icons.arrow_drop_down,
                         size: 18,

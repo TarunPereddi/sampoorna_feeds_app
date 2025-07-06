@@ -57,11 +57,12 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
       _searchController.text = widget.initialSearchText!;
     }
     
-    // Get sales person code
+    // Get sales person code - use teamCode for team persona
     final authService = Provider.of<AuthService>(context, listen: false);
     final salesPerson = authService.currentUser;
     if (salesPerson != null) {
-      _salesPersonCode = salesPerson.code;
+      // For team persona, use teamCode from Sales_Team_Code, otherwise use regular code
+      _salesPersonCode = salesPerson.teamCode.isNotEmpty ? salesPerson.teamCode : salesPerson.code;
     }
     
     // Add scroll listener for pagination
@@ -99,6 +100,7 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
         page: _currentPage,
         pageSize: _itemsPerPage,
         blockFilter: null, // Show all customers, including blocked ones
+        fieldName: 'Team_Code', // Use Team_Code for team persona filtering
       );
       
       setState(() {
@@ -131,6 +133,7 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
         page: _currentPage,
         pageSize: _itemsPerPage,
         blockFilter: null, // Show all customers, including blocked ones
+        fieldName: 'Team_Code', // Use Team_Code for team persona filtering
       );
       
       setState(() {

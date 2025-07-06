@@ -190,20 +190,21 @@ class _OrdersScreenFixedState extends State<OrdersScreenFixed>
         throw Exception('User not authenticated');
       }
 
-      // Build the base filter for salesperson codes
+      // Build the base filter for team codes (for team persona)
       String? baseFilter;
-      if (user.runtimeType.toString().contains('SalesPerson')) {
-        // For SalesPerson, use Salesperson_Code filter with support for multiple codes
-        final codeString = user.code as String;
-        final codes = codeString.isNotEmpty ? codeString.split(',') : [];
-        
-        if (codes.isNotEmpty) {
-          if (codes.length > 1) {
-            // Multiple codes: create OR filter with parentheses for proper precedence
-            baseFilter = "(${codes.map((code) => "Salesperson_Code eq '${code.trim()}'").join(' or ')})";
-          } else {
-            // Single code
-            baseFilter = "Salesperson_Code eq '${codes.first.trim()}'";
+      if (user is SalesPerson) {
+        // For team persona, use Team_Code filter with support for multiple codes
+        if (user.teamCode.isNotEmpty) {
+          final codes = user.teamCode.split(',').map((code) => code.trim()).where((code) => code.isNotEmpty).toList();
+          
+          if (codes.isNotEmpty) {
+            if (codes.length > 1) {
+              // Multiple codes: create OR filter with parentheses for proper precedence
+              baseFilter = "(${codes.map((code) => "Team_Code eq '$code'").join(' or ')})";
+            } else {
+              // Single code
+              baseFilter = "Team_Code eq '${codes.first}'";
+            }
           }
         }
       }
