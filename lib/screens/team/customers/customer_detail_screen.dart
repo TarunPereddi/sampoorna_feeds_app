@@ -1335,6 +1335,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
         );
       },
     );
+    
   }
   Widget _buildDatePickerField({
     required BuildContext context,
