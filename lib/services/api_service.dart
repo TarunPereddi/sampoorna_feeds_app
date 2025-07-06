@@ -1285,11 +1285,21 @@ Future<Map<String, dynamic>> deleteSalesOrderLine(String orderNo, int lineNo) as
   Future<dynamic> updateSalesOrderLine({
     required String documentNo,
     required int lineNo,
+    String? itemNo,
+    String? description,
     double? quantity,
     String? unitOfMeasureCode,
     Map<String, dynamic>? additionalFields,
   }) async {
     Map<String, dynamic> body = {};
+    
+    if (itemNo != null) {
+      body['No'] = itemNo;
+    }
+    
+    if (description != null) {
+      body['Description'] = description;
+    }
     
     if (quantity != null) {
       body['Quantity'] = quantity;

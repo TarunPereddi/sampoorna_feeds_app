@@ -41,7 +41,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   List<Map<String, dynamic>> _itemsToUpdate = [];
     // Controllers for editable fields
   final TextEditingController _orderDateController = TextEditingController();
-  final TextEditingController _deliveryDateController = TextEditingController();
+
   final TextEditingController _saleCodeController = TextEditingController();
   final TextEditingController _shipToCodeController = TextEditingController();
   
@@ -67,7 +67,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   @override
   void dispose() {
     _orderDateController.dispose();
-    _deliveryDateController.dispose();
     _saleCodeController.dispose();
     _shipToCodeController.dispose();
     super.dispose();
@@ -236,20 +235,9 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       final orderDate = _orderData!['Order_Date'] != null 
           ? DateTime.parse(_orderData!['Order_Date'])
           : null;
-          
-      final deliveryDate = _orderData!['Requested_Delivery_Date'] != null && 
-                          _orderData!['Requested_Delivery_Date'] != '0001-01-01'
-          ? DateTime.parse(_orderData!['Requested_Delivery_Date'])
-          : null;
       
       if (orderDate != null) {
         _orderDateController.text = DateFormat('dd/MM/yyyy').format(orderDate);
-      }
-      
-      if (deliveryDate != null) {
-        _deliveryDateController.text = DateFormat('dd/MM/yyyy').format(deliveryDate);
-      } else {
-        _deliveryDateController.text = 'Not specified';
       }
       
       // Initialize sale code
@@ -364,8 +352,14 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   // Save button (larger and more prominent)
                   Expanded(
                     flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSubmitting ? null : _saveOrderChanges,
+                    child: Tooltip(
+                      message: _isEditingItem 
+                          ? 'Please complete or cancel the item edit to save the order'
+                          : _isSubmitting 
+                              ? 'Saving order...'
+                              : 'Save order changes',
+                      child: ElevatedButton.icon(
+                        onPressed: (_isSubmitting || _isEditingItem) ? null : _saveOrderChanges,
                       icon: _isSubmitting 
                           ? const SizedBox(
                               width: 18,
@@ -376,15 +370,16 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                               ),
                             )
                           : const Icon(Icons.save, size: 18),
-                      label: const Text('SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF008000),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade300,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        label: const Text('SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF008000),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -470,6 +465,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           Center(
             child: _buildStatusChip(_orderData!['Status'] ?? 'Unknown'),
           ),
+          
+          // Editing mode indicator
+          if (_isEditingItem)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.edit, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Item editing in progress. Please complete or cancel the edit before saving the order.',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
           const SizedBox(height: 16), // Reduced spacing
             // Order Information
           Card(
@@ -495,7 +519,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                     children: [
                       _buildInfoRow('Order Date:', _orderDateController.text),
                       _buildInfoRow('Customer:', _orderData!['Sell_to_Customer_Name'] ?? 'Unknown Customer'),
-                      _buildInfoRow('Delivery Date:', _deliveryDateController.text),
                       _buildEditableShipToRow(),
                       _buildInfoRow('Location:', _getLocationName(_orderData!['Location_Code'])),
                     ],
@@ -614,7 +637,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       // Add the updated item to the update list
       _itemsToUpdate.add(updatedItem);
       
-      debugPrint('Added line $lineNo to update list with quantity: ${updatedItem['quantity']}, UOM: ${updatedItem['unitOfMeasure']}');
+      debugPrint('Added line $lineNo to update list with item: ${updatedItem['itemNo']}, description: ${updatedItem['itemDescription']}, quantity: ${updatedItem['quantity']}, UOM: ${updatedItem['unitOfMeasure']}');
     } else {
       // This is a new item being edited before save - just update it in place
       debugPrint('Updating new item (not yet saved) at index $_editingItemIndex');
@@ -846,10 +869,14 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           
           _updateSubmissionStatus('Updating item ${i+1} of ${_itemsToUpdate.length}: ${item['itemDescription']}...');
 
+          debugPrint('Updating line $lineNo: ItemNo=${item['itemNo']}, Description=${item['itemDescription']}, Quantity=${item['quantity']}, UOM=${item['unitOfMeasure']}');
+
           try {
             await _apiService.updateSalesOrderLine(
               documentNo: widget.orderNo,
               lineNo: lineNo,
+              itemNo: item['itemNo'] as String,
+              description: item['itemDescription'] as String,
               quantity: item['quantity'] as double,
               unitOfMeasureCode: item['unitOfMeasure'] as String,
             );

@@ -31,9 +31,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with Single
     locale: 'en_IN',
     symbol: '₹',
     decimalDigits: 2,
-  );
+  );  
   
   @override
+  
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);

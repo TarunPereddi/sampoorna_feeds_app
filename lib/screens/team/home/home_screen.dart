@@ -9,6 +9,7 @@ import '../../../services/navigation_service.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/error_dialog.dart';
 import '../../../mixins/tab_refresh_mixin.dart';
+import '../../../models/sales_person.dart';
 import '../orders/create_order_screen.dart';
 import '../orders/order_list_view.dart'; // Added import
 import '../orders/order_table_view.dart'; // Added import
@@ -82,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       // Load all data in parallel
       await Future.wait([
-        _loadRecentOrders(salesPerson.code),
+        _loadRecentOrders(salesPerson.code), // Use salesperson code for sales persona
         _loadDashboardMetrics(salesPerson.code, salesPerson.name),
       ]);
 
@@ -103,27 +104,54 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  Future<void> _loadRecentOrders(String teamCode) async {
+  Future<void> _loadRecentOrders(String salesPersonCode) async {
     try {
       // Get orders from last 48 hours
       final now = DateTime.now();
       final twoDaysAgo = now.subtract(const Duration(hours: 48));
-
+      
+      // For sales persona, filter by Salesperson_Code
+      // Handle multiple codes if they exist (comma-separated)
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final user = authService.currentUser;
+      
+      // Get codes list - handle both single code and multiple codes
+      List<String> codes = [];
+      if (user != null && user.runtimeType.toString().contains('SalesPerson')) {
+        // For SalesPerson, use the codes property
+        final codeString = user.code as String;
+        codes = codeString.isNotEmpty ? codeString.split(',') : [salesPersonCode];
+      } else {
+        // Fallback to the passed parameter
+        codes = [salesPersonCode];
+      }
+      
+      String filter;
+      if (codes.length > 1) {
+        // Multiple codes: create OR filter with parentheses for proper precedence
+        filter = "(${codes.map((code) => "Salesperson_Code eq '${code.trim()}'").join(' or ')})";
+      } else {
+        // Single code
+        filter = "Salesperson_Code eq '${codes.first.trim()}'";
+      }
+      
       final ordersData = await _apiService.getSalesOrders(
-        searchFilter: "Team_Code eq '$teamCode'",
+        searchFilter: filter,
         fromDate: twoDaysAgo,
         toDate: now,
-        limit: 10,
+        limit: 10, // Keep a limit for recent orders
+        // includeCount is not strictly necessary here if only displaying a few
       );
-
+      
       // Ensure ordersData is a List before assigning
       if (ordersData is List) {
         _recentOrders = ordersData;
       } else if (ordersData is Map && ordersData.containsKey('value') && ordersData['value'] is List) {
+        // Handle cases where API might return a map with 'value' key
         _recentOrders = ordersData['value'];
       } else {
         print('Unexpected format for recent orders: $ordersData');
-        _recentOrders = [];
+        _recentOrders = []; // Default to empty list on unexpected format
       }
     } catch (e) {
       print('Error loading recent orders: $e');
@@ -148,6 +176,30 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         customersCount = 0;
       }
       
+      // Handle multiple salesperson codes for order filtering
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final user = authService.currentUser;
+      
+      // Get codes list - handle both single code and multiple codes
+      List<String> codes = [];
+      if (user != null && user.runtimeType.toString().contains('SalesPerson')) {
+        // For SalesPerson, use the codes property
+        final codeString = user.code as String;
+        codes = codeString.isNotEmpty ? codeString.split(',') : [salesPersonCode];
+      } else {
+        // Fallback to the passed parameter
+        codes = [salesPersonCode];
+      }
+      
+      String baseFilter;
+      if (codes.length > 1) {
+        // Multiple codes: create OR filter with parentheses for proper precedence
+        baseFilter = "(${codes.map((code) => "Salesperson_Code eq '${code.trim()}'").join(' or ')})";
+      } else {
+        // Single code
+        baseFilter = "Salesperson_Code eq '${codes.first.trim()}'";
+      }
+      
       // Load order counts by status with individual error handling
       int pendingCount = 0;
       int releasedCount = 0;
@@ -155,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       
       try {
         final pendingResponse = await _apiService.getSalesOrders(
-          salesPersonName: salesPersonName,
+          searchFilter: baseFilter,
           status: 'Pending Approval',
           limit: 1,
           includeCount: true,
@@ -167,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       
       try {
         final releasedResponse = await _apiService.getSalesOrders(
-          salesPersonName: salesPersonName,
+          searchFilter: baseFilter,
           status: 'Released',
           limit: 1,
           includeCount: true,
@@ -179,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       
       try {
         final openResponse = await _apiService.getSalesOrders(
-          salesPersonName: salesPersonName,
+          searchFilter: baseFilter,
           status: 'Open',
           limit: 1,
           includeCount: true,

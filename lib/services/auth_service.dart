@@ -247,47 +247,80 @@ class AuthService extends ChangeNotifier {
             notifyListeners();
             return true;
           } else {
-            final response = await apiService.get('SalesPerson', 
-              queryParams: {'\$filter': "Code eq '$username'"});
-            final salesPersons = response['value'] as List;
-            if (salesPersons.isEmpty) {
-              _error = 'User not found';
-              _isLoading = false;
-              notifyListeners();
-              return false;
-            }
-            if (salesPersons[0]['Block'] == true) {
-              _error = 'User is blocked';
-              _isLoading = false;
-              notifyListeners();
-              return false;
-            }
-            
-            // Create initial SalesPerson object
-            var salesPerson = SalesPerson.fromJson(salesPersons[0]);
-            
-            // Now fetch Webuser details to override code and location
-            final webuserResponse = await apiService.get('Webuser', 
-              queryParams: {'\$filter': "User_Name eq '$username'"});
-            
-            final webusers = webuserResponse['value'] as List;
-            
-            if (webusers.isNotEmpty) {
+            // Handle sales and team personas differently
+            if (persona == 'team') {
+              // For team users, fetch directly from Webuser
+              final webuserResponse = await apiService.get('Webuser', 
+                queryParams: {'\$filter': "User_Name eq '$username'"});
+              
+              final webusers = webuserResponse['value'] as List;
+              
+              if (webusers.isEmpty) {
+                _error = 'Team user not found';
+                _isLoading = false;
+                notifyListeners();
+                return false;
+              }
+              
               final webuser = webusers[0];
-              // Override code and location with data from Webuser
-              salesPerson = SalesPerson(
-                code: webuser['Sales_Person_Code'] ?? salesPerson.code,
-                name: salesPerson.name,
-                responsibilityCenter: salesPerson.responsibilityCenter,
-                blocked: salesPerson.blocked,
-                email: salesPerson.email,
-                location: webuser['Location_Code'] ?? salesPerson.location,
-                phoneNo: salesPerson.phoneNo,
+              
+              // Create SalesPerson object from webuser data
+              final salesPerson = SalesPerson(
+                code: webuser['Sales_Person_Code'] ?? username,
+                name: webuser['Full_Name'] ?? username,
+                responsibilityCenter: '',
+                blocked: false,
+                email: '',
+                location: webuser['Location_Code'] ?? '',
+                phoneNo: '',
               );
+              
+              _currentUser = salesPerson;
+              await _saveSession(_currentUser!, username);
+            } else {
+              // Get the sales person details for sales persona
+              final response = await apiService.get('SalesPerson', 
+                queryParams: {'\$filter': "Code eq '$username'"});
+              final salesPersons = response['value'] as List;
+              if (salesPersons.isEmpty) {
+                _error = 'User not found';
+                _isLoading = false;
+                notifyListeners();
+                return false;
+              }
+              if (salesPersons[0]['Block'] == true) {
+                _error = 'User is blocked';
+                _isLoading = false;
+                notifyListeners();
+                return false;
+              }
+              
+              // Create initial SalesPerson object
+              var salesPerson = SalesPerson.fromJson(salesPersons[0]);
+              
+              // Now fetch Webuser details to override code and location
+              final webuserResponse = await apiService.get('Webuser', 
+                queryParams: {'\$filter': "User_Name eq '$username'"});
+              
+              final webusers = webuserResponse['value'] as List;
+              
+              if (webusers.isNotEmpty) {
+                final webuser = webusers[0];
+                // Override code and location with data from Webuser
+                salesPerson = SalesPerson(
+                  code: webuser['Sales_Person_Code'] ?? salesPerson.code,
+                  name: salesPerson.name,
+                  responsibilityCenter: salesPerson.responsibilityCenter,
+                  blocked: salesPerson.blocked,
+                  email: salesPerson.email,
+                  location: webuser['Location_Code'] ?? salesPerson.location,
+                  phoneNo: salesPerson.phoneNo,
+                );
+              }
+              
+              _currentUser = salesPerson;
+              await _saveSession(_currentUser!, username);
             }
-            
-            _currentUser = salesPerson;
-            await _saveSession(_currentUser!, username);
             _isLoading = false;
             notifyListeners();
             return true;
@@ -516,51 +549,83 @@ class AuthService extends ChangeNotifier {
           _currentUser = customerObj;
           await _saveSession(customerObj, username);
         } else {
-          // Get the sales person details for sales/team personas
-          final response = await apiService.get('SalesPerson', 
-            queryParams: {'\$filter': "Code eq '$username'"});
-          
-          final salesPersons = response['value'] as List;
-          
-          if (salesPersons.isEmpty) {
-            _error = 'User not found';
-            _isLoading = false;
-            notifyListeners();
-            return false;
-          }
-          
-          if (salesPersons[0]['Block'] == true) {
-            _error = 'User is blocked';
-            _isLoading = false;
-            notifyListeners();
-            return false;
-          }
-          
-          // Create initial SalesPerson object
-          var salesPerson = SalesPerson.fromJson(salesPersons[0]);
-          
-          // Now fetch Webuser details to override code and location
-          final webuserResponse = await apiService.get('Webuser', 
-            queryParams: {'\$filter': "User_Name eq '$username'"});
-          
-          final webusers = webuserResponse['value'] as List;
-          
-          if (webusers.isNotEmpty) {
+          // Handle sales and team personas differently
+          if (persona == 'team') {
+            // For team users, fetch directly from Webuser
+            final webuserResponse = await apiService.get('Webuser', 
+              queryParams: {'\$filter': "User_Name eq '$username'"});
+            
+            final webusers = webuserResponse['value'] as List;
+            
+            if (webusers.isEmpty) {
+              _error = 'Team user not found';
+              _isLoading = false;
+              notifyListeners();
+              return false;
+            }
+            
             final webuser = webusers[0];
-            // Override code and location with data from Webuser
-            salesPerson = SalesPerson(
-              code: webuser['Sales_Person_Code'] ?? salesPerson.code,
-              name: salesPerson.name,
-              responsibilityCenter: salesPerson.responsibilityCenter,
-              blocked: salesPerson.blocked,
-              email: salesPerson.email,
-              location: webuser['Location_Code'] ?? salesPerson.location,
-              phoneNo: salesPerson.phoneNo,
+            
+            // Create SalesPerson object from webuser data
+            final salesPerson = SalesPerson(
+              code: webuser['Sales_Person_Code'] ?? username,
+              name: webuser['Full_Name'] ?? username,
+              responsibilityCenter: '',
+              blocked: false,
+              email: '',
+              location: webuser['Location_Code'] ?? '',
+              phoneNo: '',
             );
+            
+            _currentUser = salesPerson;
+            await _saveSession(_currentUser!, username);
+          } else {
+            // Get the sales person details for sales persona
+            final response = await apiService.get('SalesPerson', 
+              queryParams: {'\$filter': "Code eq '$username'"});
+            
+            final salesPersons = response['value'] as List;
+            
+            if (salesPersons.isEmpty) {
+              _error = 'User not found';
+              _isLoading = false;
+              notifyListeners();
+              return false;
+            }
+            
+            if (salesPersons[0]['Block'] == true) {
+              _error = 'User is blocked';
+              _isLoading = false;
+              notifyListeners();
+              return false;
+            }
+            
+            // Create initial SalesPerson object
+            var salesPerson = SalesPerson.fromJson(salesPersons[0]);
+            
+            // Now fetch Webuser details to override code and location
+            final webuserResponse = await apiService.get('Webuser', 
+              queryParams: {'\$filter': "User_Name eq '$username'"});
+            
+            final webusers = webuserResponse['value'] as List;
+            
+            if (webusers.isNotEmpty) {
+              final webuser = webusers[0];
+              // Override code and location with data from Webuser
+              salesPerson = SalesPerson(
+                code: webuser['Sales_Person_Code'] ?? salesPerson.code,
+                name: salesPerson.name,
+                responsibilityCenter: salesPerson.responsibilityCenter,
+                blocked: salesPerson.blocked,
+                email: salesPerson.email,
+                location: webuser['Location_Code'] ?? salesPerson.location,
+                phoneNo: salesPerson.phoneNo,
+              );
+            }
+            
+            _currentUser = salesPerson;
+            await _saveSession(_currentUser!, username);
           }
-          
-          _currentUser = salesPerson;
-          await _saveSession(_currentUser!, username);
         }
         
         _isLoading = false;

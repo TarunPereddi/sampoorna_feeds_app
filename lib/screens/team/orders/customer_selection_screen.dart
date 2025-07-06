@@ -386,6 +386,23 @@ class _CustomerSelectionScreenState extends State<CustomerSelectionScreen> {
                           ),
                                     ],
                                   ),
+                                  if (customer.responsibilityCenter != null && customer.responsibilityCenter!.isNotEmpty)
+                                    Row(
+                                      children: [
+                                        Icon(Icons.business_center, 
+                                            size: 14, 
+                                            color: AppColors.grey600),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'RC: ${customer.responsibilityCenter}',
+                                          style: TextStyle(
+                                            color: AppColors.grey600,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                 ],
                               ),
                               tileColor: isSelected 

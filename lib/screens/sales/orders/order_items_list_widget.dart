@@ -51,8 +51,8 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
             items.isEmpty
                 ? _buildEmptyState()
                 : isSmallScreen
-                ? _buildItemsCards()
-                : _buildItemsTable(),
+                ? _buildItemsCards(context)
+                : _buildItemsTable(context),
 
             // Total Amount
             if (items.isNotEmpty)
@@ -130,7 +130,7 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
   }
 
   // Cards layout for small screens
-  Widget _buildItemsCards() {
+  Widget _buildItemsCards(BuildContext buildContext) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -195,17 +195,49 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
                           children: [
                             // Edit button for existing items (items with lineNo)
                             if (onEditItem != null && item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0)
-                              IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                constraints: const BoxConstraints(),
-                                padding: EdgeInsets.zero,
-                                onPressed: () => onEditItem!(index),
+                              InkWell(
+                                onTap: () => onEditItem!(index),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit, color: Colors.blue.shade700, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Edit',
+                                        style: TextStyle(
+                                          color: Colors.blue.shade700,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                              constraints: const BoxConstraints(),
-                              padding: EdgeInsets.zero,
-                              onPressed: () => onRemoveItem(index),
+                            // Delete button - icon only with confirmation dialog
+                            InkWell(
+                              onTap: () => _showDeleteConfirmationDialog(buildContext, index, items, onRemoveItem),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Icon(
+                                  Icons.delete,
+                                  color: Colors.red.shade700,
+                                  size: 18,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -287,7 +319,7 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
     );
   }
   // Table layout for larger screens
-  Widget _buildItemsTable() {
+  Widget _buildItemsTable(BuildContext buildContext) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -323,13 +355,51 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
                     children: [
                       // Edit button for existing items (items with lineNo)
                       if (onEditItem != null && item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0)
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                          onPressed: () => onEditItem!(index),
+                        Container(
+                          margin: const EdgeInsets.only(right: 4),
+                          child: InkWell(
+                            onTap: () => onEditItem!(index),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit, color: Colors.blue.shade700, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Edit',
+                                    style: TextStyle(
+                                      color: Colors.blue.shade700,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                        onPressed: () => onRemoveItem(index),
+                      // Delete button - icon only with confirmation dialog
+                      InkWell(
+                        onTap: () => _showDeleteConfirmationDialog(buildContext, index, items, onRemoveItem),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Icon(
+                            Icons.delete,
+                            color: Colors.red.shade700,
+                            size: 14,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -346,5 +416,79 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
     final RegExp regex = RegExp(r'\((.*?)\)$');
     final match = regex.firstMatch(description);
     return match?.group(1) ?? 'Cannot Delete';
+  }
+
+  // Show delete confirmation dialog
+  static void _showDeleteConfirmationDialog(
+    BuildContext context, 
+    int index, 
+    List<Map<String, dynamic>> items, 
+    Function(int) onRemoveItem
+  ) {
+    final item = items[index];
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.orange, size: 24),
+              const SizedBox(width: 8),
+              const Text('Confirm Delete'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Are you sure you want to delete this item?'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item['itemNo']} - ${item['itemDescription']}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Quantity: ${item['quantity']} ${item['unitOfMeasure']}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onRemoveItem(index);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

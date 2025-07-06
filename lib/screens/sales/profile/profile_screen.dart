@@ -17,6 +17,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  f
   bool _isLoading = true;
   String? _errorMessage;
   Map<String, dynamic>? _salesPersonDetails;
+  List<Map<String, dynamic>> _userLocations = [];
 
   // TabRefreshMixin implementation
   @override
@@ -56,6 +57,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  f
 
       // Load sales person data
       final salesPersonData = await _apiService.getSalesPersonDetails(salesPerson.code);
+      
+      // Load locations using webuser data
+      await _loadUserLocations(salesPerson);
+      
       setState(() {
         _salesPersonDetails = salesPersonData;
         _isLoading = false;
@@ -66,6 +71,28 @@ class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  f
         _isLoading = false;
       });
       debugPrint('Error loading profile details: $e');
+    }
+  }
+
+  Future<void> _loadUserLocations(dynamic salesPerson) async {
+    try {
+      // Get location codes from the current user
+      List<String> locationCodes = [];
+      
+      if (salesPerson.locationCodes != null && salesPerson.locationCodes.isNotEmpty) {
+        locationCodes = salesPerson.locationCodes;
+      }
+      
+      if (locationCodes.isNotEmpty) {
+        // Fetch detailed location information
+        final locationsData = await _apiService.getLocations(locationCodes: locationCodes);
+        setState(() {
+          _userLocations = List<Map<String, dynamic>>.from(locationsData);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user locations: $e');
+      // Don't fail the entire profile load if locations fail
     }
   }
   @override
@@ -401,11 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  f
               salesPerson['Commission_Percent']?.toString() ?? 'N/A', 
               Icons.percent,
             ),
-            _buildProfileDetailItem(
-              'Location', 
-              salesPerson['Location'] ?? 'N/A', 
-              Icons.location_on,
-            ),
+            _buildLocationsSection(),
           ],
         ),
       ),
@@ -454,6 +477,111 @@ class _ProfileScreenState extends State<ProfileScreen> with TabRefreshMixin {  f
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLocationsSection() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentUser = authService.currentUser;
+    
+    if (_userLocations.isEmpty) {
+      // Fallback to show the basic location from sales person details if available
+      final fallbackLocation = _salesPersonDetails?['Location'] ?? 
+                              (currentUser?.location ?? 'N/A');
+      
+      return _buildProfileDetailItem(
+        'Location', 
+        fallbackLocation != 'N/A' && fallbackLocation.isNotEmpty 
+            ? fallbackLocation 
+            : 'No locations assigned', 
+        Icons.location_on,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.location_on,
+                size: 16,
+                color: AppColors.grey600,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Assigned Locations',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.grey700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _userLocations.map((location) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.business,
+                            size: 12,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  location['Code'] ?? 'N/A',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                if (location['Name'] != null && location['Name'].toString().isNotEmpty)
+                                  Text(
+                                    location['Name'],
+                                    style: TextStyle(
+                                      color: AppColors.grey600,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
