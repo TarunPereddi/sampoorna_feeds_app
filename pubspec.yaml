@@ -2,7 +2,7 @@ name: sampoorna_feeds_app
 description: "Professional livestock feed business management and inventory tracking solution for distributors and retailers."
 publish_to: 'none'
 
-version: 1.0.0+13
+version: 1.0.0+15 #changed
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

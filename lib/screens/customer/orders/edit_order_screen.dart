@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../models/customer.dart';
+import '../../../models/sales_person.dart';
 import '../../../models/location.dart';
 import '../../../models/ship_to.dart';
 import '../../../utils/app_colors.dart';
@@ -38,9 +40,10 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   List<Map<String, dynamic>> _originalItems = [];
   List<int> _itemsToDelete = [];
   List<Map<String, dynamic>> _itemsToAdd = [];
+  List<Map<String, dynamic>> _itemsToUpdate = [];
     // Controllers for editable fields
   final TextEditingController _orderDateController = TextEditingController();
-  final TextEditingController _deliveryDateController = TextEditingController();
+
   final TextEditingController _saleCodeController = TextEditingController();
   final TextEditingController _shipToCodeController = TextEditingController();
   
@@ -53,6 +56,11 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   String? _errorMessage;
   String _submissionStatus = '';
   
+  // Edit mode state
+  bool _isEditingItem = false;
+  int? _editingItemIndex;
+  Map<String, dynamic>? _editingItemData;
+  
   @override
   void initState() {
     super.initState();
@@ -61,7 +69,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   @override
   void dispose() {
     _orderDateController.dispose();
-    _deliveryDateController.dispose();
     _saleCodeController.dispose();
     _shipToCodeController.dispose();
     super.dispose();
@@ -189,6 +196,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       // Clear tracking collections since we're reloading
       _itemsToDelete = [];
       _itemsToAdd = [];
+      _itemsToUpdate = [];
 
       debugPrint('Order items loaded: ${_orderItems.length}');
       // Log all line numbers for verification
@@ -200,11 +208,24 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
 
       // Fetch locations
       final authService = Provider.of<AuthService>(context, listen: false);
-      if (authService.currentUser != null) {
-        final locationCodes = authService.currentUser!.locationCodes;
+      final currentUser = authService.currentUser;
+      if (currentUser != null) {
+        List<String> locationCodes = [];
+        
+        // Handle both Customer and SalesPerson types
+        if (currentUser is Customer) {
+          locationCodes = currentUser.locationCodes;
+        } else if (currentUser is SalesPerson) {
+          locationCodes = currentUser.locationCodes;
+        }
+        
         if (locationCodes.isNotEmpty) {
+          debugPrint('Loading locations with codes: $locationCodes');
           final locationsData = await _apiService.getLocations(locationCodes: locationCodes);
           _locations = locationsData.map((json) => Location.fromJson(json)).toList();
+          debugPrint('Locations loaded successfully: ${_locations.length} locations');
+        } else {
+          debugPrint('No location codes available for current user');
         }
       }
 
@@ -229,20 +250,9 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       final orderDate = _orderData!['Order_Date'] != null 
           ? DateTime.parse(_orderData!['Order_Date'])
           : null;
-          
-      final deliveryDate = _orderData!['Requested_Delivery_Date'] != null && 
-                          _orderData!['Requested_Delivery_Date'] != '0001-01-01'
-          ? DateTime.parse(_orderData!['Requested_Delivery_Date'])
-          : null;
       
       if (orderDate != null) {
         _orderDateController.text = DateFormat('dd/MM/yyyy').format(orderDate);
-      }
-      
-      if (deliveryDate != null) {
-        _deliveryDateController.text = DateFormat('dd/MM/yyyy').format(deliveryDate);
-      } else {
-        _deliveryDateController.text = 'Not specified';
       }
       
       // Initialize sale code
@@ -357,8 +367,14 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   // Save button (larger and more prominent)
                   Expanded(
                     flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSubmitting ? null : _saveOrderChanges,
+                    child: Tooltip(
+                      message: _isEditingItem 
+                          ? 'Please complete or cancel the item edit to save the order'
+                          : _isSubmitting 
+                              ? 'Saving order...'
+                              : 'Save order changes',
+                      child: ElevatedButton.icon(
+                        onPressed: (_isSubmitting || _isEditingItem) ? null : _saveOrderChanges,
                       icon: _isSubmitting 
                           ? const SizedBox(
                               width: 18,
@@ -369,15 +385,16 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                               ),
                             )
                           : const Icon(Icons.save, size: 18),
-                      label: const Text('SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF008000),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade300,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        label: const Text('SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF008000),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -463,6 +480,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           Center(
             child: _buildStatusChip(_orderData!['Status'] ?? 'Unknown'),
           ),
+          
+          // Editing mode indicator
+          if (_isEditingItem)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.edit, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Item editing in progress. Please complete or cancel the edit before saving the order.',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
           const SizedBox(height: 16), // Reduced spacing
             // Order Information
           Card(
@@ -488,7 +534,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                     children: [
                       _buildInfoRow('Order Date:', _orderDateController.text),
                       _buildInfoRow('Customer:', _orderData!['Sell_to_Customer_Name'] ?? 'Unknown Customer'),
-                      _buildInfoRow('Delivery Date:', _deliveryDateController.text),
                       _buildEditableShipToRow(),
                       _buildInfoRow('Location:', _getLocationName(_orderData!['Location_Code'])),
                     ],
@@ -502,8 +547,11 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           OrderItemFormWidget(
             isSmallScreen: isSmallScreen,
             onAddItem: _addItem,
-            locationCode: _orderData!['Location_Code'] as String? ?? '',            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
-            isEditMode: true,
+            onCancelEdit: _cancelEdit,
+            locationCode: _orderData!['Location_Code'] as String? ?? '',
+            customerPriceGroup: _orderData!['Customer_Price_Group'] as String? ?? '',
+            isEditMode: _isEditingItem,
+            editingItemData: _editingItemData,
           ),
           const SizedBox(height: 16), // Reduced spacing
           
@@ -511,8 +559,10 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
           OrderItemsListWidget(
             items: _orderItems,
             isSmallScreen: isSmallScreen,
-            onRemoveItem: _removeItem,            onClearAll: _clearAllItems,
+            onRemoveItem: _removeItem,
+            onClearAll: _clearAllItems,
             totalAmount: _calculateOrderTotal(),
+            onEditItem: _editItem, // Pass the edit callback
           ),
           
           const SizedBox(height: 16), // Reduced spacing
@@ -522,6 +572,12 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   }
 
   void _addItem(Map<String, dynamic> item) {
+    // Check if we're in edit mode
+    if (_isEditingItem) {
+      _updateItem(item);
+      return;
+    }
+    
     // Only add to the _itemsToAdd list if it's truly a new item (no lineNo)
     if (!item.containsKey('lineNo') || item['lineNo'] == null || item['lineNo'] <= 0) {
       _itemsToAdd.add(item);
@@ -573,45 +629,90 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
       _orderItems.removeAt(index);
     });
   }
+
   void _clearAllItems() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear All Items'),
-        content: const Text('Are you sure you want to remove all items from this order?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {              // Process each item like individual deletion
-              for (var item in List.from(_orderItems)) {
-                if (item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0) {
-                  final lineNo = item['lineNo'] as int;
-                  // Check for duplicates before adding to delete list
-                  if (!_itemsToDelete.contains(lineNo)) {
-                    _itemsToDelete.add(lineNo);
-                    debugPrint('Adding line $lineNo to delete list');
-                  }
-                }
-              }
-              
-              setState(() {
-                _orderItems.clear();
-              });
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Clear All'),
-          ),
-        ],
+    setState(() {
+      // Clear all items from the order
+      _orderItems.clear();
+      
+      // Clear all tracking lists
+      _itemsToAdd.clear();
+      _itemsToUpdate.clear();
+      _itemsToDelete.clear();
+      
+      // Reset editing state
+      _isEditingItem = false;
+    });
+    
+    // Show confirmation message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('All items cleared from order'),
+        backgroundColor: Colors.orange,
       ),
     );
   }
+
+  void _editItem(int index) {
+    final item = _orderItems[index];
+    
+    setState(() {
+      _isEditingItem = true;
+      _editingItemIndex = index;
+      _editingItemData = Map<String, dynamic>.from(item);
+    });
+    
+    debugPrint('Editing item at index $index: ${item['itemDescription']}');
+  }
+
+  void _updateItem(Map<String, dynamic> updatedItem) {
+    if (_editingItemIndex == null) return;
+    
+    final originalItem = _orderItems[_editingItemIndex!];
+    
+    // Check if this is an existing item (has lineNo) or a new item
+    if (originalItem.containsKey('lineNo') && originalItem['lineNo'] != null && originalItem['lineNo'] > 0) {
+      // This is an existing item - track it for update
+      final lineNo = originalItem['lineNo'] as int;
+      
+      // Remove from update list if it exists (to avoid duplicates)
+      _itemsToUpdate.removeWhere((item) => item['lineNo'] == lineNo);
+      
+      // Add the updated item to the update list
+      _itemsToUpdate.add(updatedItem);
+      
+      debugPrint('Added line $lineNo to update list with item: ${updatedItem['itemNo']}, description: ${updatedItem['itemDescription']}, quantity: ${updatedItem['quantity']}, UOM: ${updatedItem['unitOfMeasure']}');
+    } else {
+      // This is a new item being edited before save - just update it in place
+      debugPrint('Updating new item (not yet saved) at index $_editingItemIndex');
+    }
+    
+    // Update the item in the display list
+    setState(() {
+      _orderItems[_editingItemIndex!] = updatedItem;
+      _isEditingItem = false;
+      _editingItemIndex = null;
+      _editingItemData = null;
+    });
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Item updated successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _isEditingItem = false;
+      _editingItemIndex = null;
+      _editingItemData = null;
+    });
+  }
+
+  // ...existing code...
   
   double _calculateOrderTotal() {
     double total = 0;
@@ -775,7 +876,39 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             unitOfMeasureCode: item['unitOfMeasure'],
           );
         }
-      }      _updateSubmissionStatus('Order updated successfully!');
+      }
+
+      // 4. Update existing items that have been modified
+      if (_itemsToUpdate.isNotEmpty) {
+        _updateSubmissionStatus('Updating existing items...');
+
+        for (int i = 0; i < _itemsToUpdate.length; i++) {
+          final item = _itemsToUpdate[i];
+          final lineNo = item['lineNo'] as int;
+          
+          _updateSubmissionStatus('Updating item ${i+1} of ${_itemsToUpdate.length}: ${item['itemDescription']}...');
+
+          debugPrint('Updating line $lineNo: ItemNo=${item['itemNo']}, Description=${item['itemDescription']}, Quantity=${item['quantity']}, UOM=${item['unitOfMeasure']}');
+
+          try {
+            await _apiService.updateSalesOrderLine(
+              documentNo: widget.orderNo,
+              lineNo: lineNo,
+              itemNo: item['itemNo'] as String,
+              description: item['itemDescription'] as String,
+              quantity: item['quantity'] as double,
+              unitOfMeasureCode: item['unitOfMeasure'] as String,
+            );
+            
+            debugPrint('Successfully updated line $lineNo');
+          } catch (e) {
+            debugPrint('Error updating line $lineNo: $e');
+            throw Exception('Failed to update item ${item['itemDescription']}: $e');
+          }
+        }
+      }
+
+      _updateSubmissionStatus('Order updated successfully!');
       
       // Reset ship-to code change tracking after successful update
       if (_shipToCodeChanged) {
@@ -793,12 +926,13 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
             backgroundColor: Colors.green,
           ),
         );
-      }setState(() {
+      }      setState(() {
         _isSubmitting = false;
         // Clear the tracking arrays after successful update
         if (!shouldStayOnEditScreen) {
           _itemsToDelete.clear();
           _itemsToAdd.clear();
+          _itemsToUpdate.clear();
         }
       });
       
@@ -862,7 +996,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   TableRow _buildEditableShipToRow() {
     // Get current ship-to display text (code + name if available)
     String displayText = _shipToCodeController.text.trim();
-    if (_originalShipToName != null && _originalShipToName!.isNotEmpty) {
+    if (_originalShipToName != null && _originalShipToName!.isNotEmpty && displayText.isNotEmpty) {
       displayText = '${_shipToCodeController.text.trim()} - $_originalShipToName';
     }
     
@@ -945,13 +1079,35 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Clear button - always show to allow clearing the field
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _shipToCodeController.clear();
+                            _originalShipToName = null;
+                            _shipToCodeChanged = '' != (_originalShipToCode ?? '');
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.clear,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Edit indicator
                       if (_shipToCodeChanged)
                         Icon(
                           Icons.edit,
                           size: 16,
                           color: Colors.orange.shade600,
                         ),
-                      const SizedBox(width: 4),
+                      if (_shipToCodeChanged)
+                        const SizedBox(width: 4),
+                      // Dropdown arrow
                       Icon(
                         Icons.arrow_drop_down,
                         size: 18,

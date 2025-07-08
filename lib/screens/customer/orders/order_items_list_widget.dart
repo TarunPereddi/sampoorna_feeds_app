@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dynamic>> items;
   final bool isSmallScreen;
   final Function(int) onRemoveItem;
+  final Function(int)? onEditItem;
   final VoidCallback onClearAll;
   final double totalAmount;
 
@@ -12,6 +13,7 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
     required this.items,
     required this.isSmallScreen,
     required this.onRemoveItem,
+    this.onEditItem,
     required this.onClearAll,
     required this.totalAmount,
   });
@@ -187,11 +189,46 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
                             size: 20,
                           ),
                         )
-                      : IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                          constraints: const BoxConstraints(),
-                          padding: EdgeInsets.zero,
-                          onPressed: () => onRemoveItem(index),
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Edit button for existing items (items with lineNo)
+                            if (onEditItem != null && item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0)
+                              InkWell(
+                                onTap: () => onEditItem!(index),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit, color: Colors.blue.shade700, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Edit',
+                                        style: TextStyle(
+                                          color: Colors.blue.shade700,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            // Delete button
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                              onPressed: () => onRemoveItem(index),
+                            ),
+                          ],
                         ),
                   ],
                 ),
@@ -302,9 +339,44 @@ class OrderItemsListWidget extends StatelessWidget {  final List<Map<String, dyn
                     message: 'Cannot delete: ${_extractErrorReason(item['itemDescription'])}',
                     child: Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
                   )
-                : IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                    onPressed: () => onRemoveItem(index),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Edit button for existing items (items with lineNo)
+                      if (onEditItem != null && item.containsKey('lineNo') && item['lineNo'] != null && item['lineNo'] > 0)
+                        InkWell(
+                          onTap: () => onEditItem!(index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit, color: Colors.blue.shade700, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Edit',
+                                  style: TextStyle(
+                                    color: Colors.blue.shade700,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      // Delete button
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                        onPressed: () => onRemoveItem(index),
+                      ),
+                    ],
                   ),
               ),
             ],

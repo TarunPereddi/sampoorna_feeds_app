@@ -736,31 +736,4 @@ class AuthService extends ChangeNotifier {
     await clearSession();
     notifyListeners();
   }
-
-  // Mock customer login for development
-  Future<void> setMockCustomer(Map<String, dynamic> customerData, String persona) async {
-    try {
-      // Create customer object from mock data
-      final customer = Customer.fromJson(customerData);
-      
-      // Set as current user
-      _currentUser = customer;
-      
-      // Save mock session
-      await _saveSession(customer, 'mock_customer', persona: persona);
-      
-      // Clear any previous errors
-      _error = null;
-      
-      // Notify listeners
-      notifyListeners();
-      
-      debugPrint('Mock customer login successful: ${customer.name}');
-    } catch (e) {
-      _error = 'Mock login failed: $e';
-      debugPrint('Mock customer login error: $e');
-      notifyListeners();
-      throw Exception(_error);
-    }
-  }
 }

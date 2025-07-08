@@ -58,6 +58,14 @@ class Customer {
     );
   }
 
+  // Get location codes from customerLocation (comma-separated string)
+  List<String> get locationCodes {
+    if (customerLocation != null && customerLocation!.isNotEmpty) {
+      return customerLocation!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
+  }
+
   @override
   String toString() {
     return name;
